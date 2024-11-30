@@ -12,6 +12,7 @@ let lineCountEnd = ". ";
 let lineCountActive = false;
 let overrideLineCount = null;
 let lineCountPadding = 4;
+let consoleLog = null;
 
 const termColor = (clr, str) => {
   return str.length ? `\u001b[${clr}m${normalizeAll(str)}\u001b[m` : `\u001b[${clr}m`;
@@ -103,11 +104,16 @@ function print(...values) {
       processWrite("\n");
       isLineStart = true;
       isLineEmpty = true;
+      if (line) {
       linePrint(line);
+      }
     }
   }
 }
 
+function println(...values) {
+  print(...values, "\n")
+}
 
 export const TermDecor = {
   show: () => { showOut = true },
@@ -149,7 +155,10 @@ export const TermDecor = {
     }
   },
   print,
-  println: (...values) => print(...values, "\n"),
+  println,
+  info: (...values) => print(Color.Foreground.Cyan(...values), "\n"),
+  warning: (...values) => print(Color.Foreground.Yellow(...values), "\n"),
+  error: (...values) => print(Color.Foreground.Red(...values), "\n"),
   Color,
   FColor: Color.Foreground,
   BColor: Color.Backgroud,
@@ -168,5 +177,17 @@ export const TermDecor = {
   },
   setOverrideLineCount: (override = null) => {
     overrideLineCount = override
-  }
+  },
+  captureConsoleLog: () => {
+    if (!consoleLog) {
+      consoleLog = console.log;
+      console.log = println;
+    }
+  },
+  releaseConsoleLog: () => {
+    if (consoleLog) {
+      console.log = consoleLog;
+      consoleLog = null;
+    }
+  },
 }
