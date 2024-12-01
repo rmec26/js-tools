@@ -105,7 +105,7 @@ function print(...values) {
       isLineStart = true;
       isLineEmpty = true;
       if (line) {
-      linePrint(line);
+        linePrint(line);
       }
     }
   }
@@ -156,6 +156,7 @@ export const TermDecor = {
   },
   print,
   println,
+  log:println,
   info: (...values) => print(Color.Foreground.Cyan(...values), "\n"),
   warning: (...values) => print(Color.Foreground.Yellow(...values), "\n"),
   error: (...values) => print(Color.Foreground.Red(...values), "\n"),
