@@ -5,7 +5,10 @@ import { StringCharReader } from "./stringCharReader.mjs";
 const NUMBERS = ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9'];
 const DECIMAL_SEPERATORS = ['.', ','];
 const NEGATIVE_SIGN = '-';
+const POSITIVE_SIGN = '+';
+const SIGNS = [NEGATIVE_SIGN, POSITIVE_SIGN];
 const FRACTION_SEPERATOR = '/';
+const EXPONENT = 'e';
 
 export class RationalParseError extends Error { }
 
@@ -87,19 +90,37 @@ export class RationalNumber {
    */
   static parse(input) {
     let isNegative = false;
-    let reader = new StringCharReader(input);
+    let reader = new StringCharReader(input.trim());
     let n1 = "";
     let n2 = "";
+    let n3 = "";
     let foundSeperator = false;
     let isDecimalSeperator = true;
-    if (reader.get() === NEGATIVE_SIGN) {
-      isNegative = true;
-      reader.getAndNext();
+    let foundExponent = false;
+    let isNegativeExponent = false;
+
+    if (reader.currIsOneOf(SIGNS)) {
+      isNegative = reader.getAndNext() === NEGATIVE_SIGN;
     }
     while (reader.hasNext()) {
-      if (foundSeperator) {
+      if (foundExponent) {
+        if (reader.currIsOneOf(NUMBERS)) {
+          n3 += reader.getAndNext();
+        } else {
+          throw new RationalParseError("Invalid char found after exponent");
+        }
+      } else if (foundSeperator) {
         if (reader.currIsOneOf(NUMBERS)) {
           n2 += reader.getAndNext();
+        } else if (reader.currIs(EXPONENT)) {
+          if (foundSeperator && !isDecimalSeperator) {
+            throw new RationalParseError("Exponent after fraction found");
+          }
+          foundExponent = true;
+          reader.getAndNext();
+          if (reader.currIsOneOf(SIGNS)) {
+            isNegativeExponent = reader.getAndNext() === NEGATIVE_SIGN;
+          }
         } else {
           throw new RationalParseError("Invalid char found after seperator");
         }
@@ -113,12 +134,25 @@ export class RationalNumber {
           foundSeperator = true;
           isDecimalSeperator = false;
           reader.getAndNext();
+        } else if (reader.currIs(EXPONENT)) {
+          if (foundSeperator && !isDecimalSeperator) {
+            throw new RationalParseError("Exponent after fraction found");
+          }
+          foundExponent = true;
+          reader.getAndNext();
+          if (reader.currIsOneOf(SIGNS)) {
+            isNegativeExponent = reader.getAndNext() === NEGATIVE_SIGN;
+          }
         } else {
           throw new RationalParseError("Invalid char found");
         }
       }
     }
+    if (foundExponent && !n3) {
+      throw new RationalParseError("No value after exponent");
+    }
     if (n1 || n2) {
+      let value;
       if (foundSeperator) {
         if (isDecimalSeperator) {
           if (!n1) {
@@ -134,23 +168,34 @@ export class RationalNumber {
             }
           }
           if (aux.length) {
-            return RationalNumber.create(isNegative, BigInt(n1 + n2), BigInt('1'.padEnd(n2.length + 1, '0')));
+            value = RationalNumber.create(isNegative, BigInt(n1 + n2), BigInt('1'.padEnd(n2.length + 1, '0')));
           } else {
-            return RationalNumber.create(isNegative, BigInt(n1));
+            value = RationalNumber.create(isNegative, BigInt(n1));
           }
         } else {//Its a fraction
           if (n1) {
             if (n2) {
-              return RationalNumber.create(isNegative, BigInt(n1), BigInt(n2));
+              value = RationalNumber.create(isNegative, BigInt(n1), BigInt(n2));
+            } else {
+              throw new RationalParseError(`No divider given`);
             }
-            throw new RationalParseError(`No divider given`);
+          } else {
+            throw new RationalParseError(`No numerator given`);
           }
-          throw new RationalParseError(`No numerator given`);
-
         }
       } else {
-        return RationalNumber.create(isNegative, BigInt(n1));
+        value = RationalNumber.create(isNegative, BigInt(n1));
       }
+      if (n3) {
+        if (isNegativeExponent) {
+          return value.div(RationalNumber.create(false, BigInt('1'.padEnd(parseInt(n3) + 1, '0'))));
+        } else {
+          return value.mul(RationalNumber.create(false, BigInt('1'.padEnd(parseInt(n3) + 1, '0'))));
+        }
+      }
+      return value;
+    } else if (n3) {
+      throw new RationalParseError(`No numbers before exponent`);
     } else {
       throw new RationalParseError(`No numbers found on the input`);
     }
@@ -276,6 +321,14 @@ export class RationalNumber {
    */
   toString(fract = -1, trimZeros = true) {
     fract = fract | 0;
+
+    if (this.numerator === 0n) {
+      if (trimZeros || fract < 1) {
+        return "0";
+      } else {
+        return "0.".padEnd(fract + 2, '0')
+      }
+    }
     if (fract >= 0) {
       // the +2 is one to cover the initial '1' and another to add an extra value on the fractional part for rounding
       let val = this.numerator * BigInt("1".padEnd(fract + 2, "0")) / this.divider;
@@ -292,7 +345,7 @@ export class RationalNumber {
       let res = val.toString();
 
       //The -1 are due to the extra value
-      let intPart = res.slice(0, res.length - fract - 1);
+      let intPart = res.slice(0, res.length - fract - 1) || '0';
       let fractPart = res.slice(res.length - fract - 1, res.length - 1);
 
       if (trimZeros) {
@@ -313,8 +366,8 @@ export class RationalNumber {
 
 /**
  * 
- * @param {string} value 
+ * @param {string|number|bigint} value 
  */
 export function Rational(value) {
-  return RationalNumber.parse(value);
+  return RationalNumber.parse(value.toString());
 }
