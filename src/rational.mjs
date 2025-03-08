@@ -9,7 +9,7 @@ const FRACTION_SEPERATOR = '/';
 
 export class RationalParseError extends Error { }
 
-export class Rational {
+export class RationalNumber {
   /**
    * @param {boolean} isNegative 
    * @param {bigint} numerator 
@@ -33,16 +33,16 @@ export class Rational {
     if (divider === 0n) {
       throw new Error("Divide by Zero");
     } else if (numerator === 0n) {
-      return new Rational(false, 0n, 1n);
+      return new RationalNumber(false, 0n, 1n);
     } else if (divider === 1n) {
-      return new Rational(isNegative, numerator, 1n);
+      return new RationalNumber(isNegative, numerator, 1n);
     } else {
       this.isNegative = isNegative;
-      let gcd = Rational.gcd(numerator, divider);
+      let gcd = RationalNumber.gcd(numerator, divider);
       if (gcd === 1n) {
-        return new Rational(isNegative, numerator, divider);
+        return new RationalNumber(isNegative, numerator, divider);
       } else {
-        return new Rational(isNegative, numerator / gcd, divider / gcd);
+        return new RationalNumber(isNegative, numerator / gcd, divider / gcd);
       }
     }
   }
@@ -66,24 +66,24 @@ export class Rational {
    * @param {bigint} b 
    */
   static lcm(a, b) {
-    return a * b / Rational.gcd(a, b);
+    return a * b / RationalNumber.gcd(a, b);
   }
 
   /**
    * @param {number} int 
-   * @returns {Rational}
+   * @returns {RationalNumber}
    */
   static fromInt(int) {
     let value = BigInt(int);
     if (value < 0n) {
-      return new Rational(true, 0n - value, 1n);
+      return new RationalNumber(true, 0n - value, 1n);
     }
-    return new Rational(false, value, 1n);
+    return new RationalNumber(false, value, 1n);
   }
 
   /**
    * @param {string} input 
-   * @returns {Rational}
+   * @returns {RationalNumber}
    */
   static parse(input) {
     let isNegative = false;
@@ -134,14 +134,14 @@ export class Rational {
             }
           }
           if (aux.length) {
-            return Rational.create(isNegative, BigInt(n1 + n2), BigInt('1'.padEnd(n2.length + 1, '0')));
+            return RationalNumber.create(isNegative, BigInt(n1 + n2), BigInt('1'.padEnd(n2.length + 1, '0')));
           } else {
-            return Rational.create(isNegative, BigInt(n1));
+            return RationalNumber.create(isNegative, BigInt(n1));
           }
         } else {//Its a fraction
           if (n1) {
             if (n2) {
-              return Rational.create(isNegative, BigInt(n1), BigInt(n2));
+              return RationalNumber.create(isNegative, BigInt(n1), BigInt(n2));
             }
             throw new RationalParseError(`No divider given`);
           }
@@ -149,7 +149,7 @@ export class Rational {
 
         }
       } else {
-        return Rational.create(isNegative, BigInt(n1));
+        return RationalNumber.create(isNegative, BigInt(n1));
       }
     } else {
       throw new RationalParseError(`No numbers found on the input`);
@@ -157,8 +157,8 @@ export class Rational {
   }
 
   /**
-   * @param {Rational} r 
-   * @returns {Rational}
+   * @param {RationalNumber} r 
+   * @returns {RationalNumber}
    */
   add(r) {
     let shouldAdd = this.isNegative === r.isNegative;
@@ -172,55 +172,55 @@ export class Rational {
       } else if (r.divider === 1n) {
         b *= d;
       } else {
-        d = Rational.lcm(this.divider, r.divider);
+        d = RationalNumber.lcm(this.divider, r.divider);
         a = d / this.divider * a;
         b = d / r.divider * b;
       }
     }
     if (shouldAdd) {
-      return Rational.create(this.isNegative, a + b, d);
+      return RationalNumber.create(this.isNegative, a + b, d);
     } else {
       if (a > b) {
-        return Rational.create(this.isNegative, a - b, d);
+        return RationalNumber.create(this.isNegative, a - b, d);
       } else {
-        return Rational.create(r.isNegative, b - a, d);
+        return RationalNumber.create(r.isNegative, b - a, d);
       }
     }
   }
 
   /**
-   * @param {Rational} r 
-   * @returns {Rational}
+   * @param {RationalNumber} r 
+   * @returns {RationalNumber}
    */
   sub(r) {
-    return this.add(new Rational(!r.isNegative, r.numerator, r.divider));
+    return this.add(new RationalNumber(!r.isNegative, r.numerator, r.divider));
   }
 
   /**
-   * @param {Rational} r 
-   * @returns {Rational}
+   * @param {RationalNumber} r 
+   * @returns {RationalNumber}
    */
   mul(r) {
-    return Rational.create(this.isNegative !== r.isNegative, this.numerator * r.numerator, this.divider * r.divider);
+    return RationalNumber.create(this.isNegative !== r.isNegative, this.numerator * r.numerator, this.divider * r.divider);
   }
 
   /**
-   * @param {Rational} r 
-   * @returns {Rational}
+   * @param {RationalNumber} r 
+   * @returns {RationalNumber}
    */
   div(r) {
-    return Rational.create(this.isNegative !== r.isNegative, this.numerator * r.divider, this.divider * r.numerator);
+    return RationalNumber.create(this.isNegative !== r.isNegative, this.numerator * r.divider, this.divider * r.numerator);
   }
 
   /**
-   * @returns {Rational}
+   * @returns {RationalNumber}
    */
   trunc() {
-    return new Rational(this.isNegative, this.numerator / this.divider, 1n);
+    return new RationalNumber(this.isNegative, this.numerator / this.divider, 1n);
   }
 
   /**
-   * @param {Rational} r 
+   * @param {RationalNumber} r 
    * @returns {boolean}
    */
   equal(r) {
@@ -228,7 +228,7 @@ export class Rational {
   }
 
   /**
-   * @param {Rational} r 
+   * @param {RationalNumber} r 
    * @returns {boolean}
    */
   less(r) {
@@ -236,7 +236,7 @@ export class Rational {
       if (this.divider === r.divider) {
         return this.numerator < r.numerator;
       } else {
-        let d = Rational.lcm(this.divider, r.divider);
+        let d = RationalNumber.lcm(this.divider, r.divider);
         return (d / this.divider * this.numerator) < (d / r.divider * r.numerator);
       }
     } else {
@@ -245,7 +245,7 @@ export class Rational {
   }
 
   /**
-   * @param {Rational} r 
+   * @param {RationalNumber} r 
    * @returns {boolean}
    */
   greater(r) {
@@ -253,7 +253,7 @@ export class Rational {
       if (this.divider === r.divider) {
         return this.numerator > r.numerator;
       } else {
-        let d = Rational.lcm(this.divider, r.divider);
+        let d = RationalNumber.lcm(this.divider, r.divider);
         return (d / this.divider * this.numerator) > (d / r.divider * r.numerator);
       }
     } else {
@@ -270,33 +270,51 @@ export class Rational {
   }
 
   /**
-   * Note: the value is truncated and not rounded when presented with floating point
+   *
    * @param {number} fract
    * @returns {string}
    */
   toString(fract = -1, trimZeros = true) {
     fract = fract | 0;
-    if (fract == 0) {
-      return `${this.isNegative ? NEGATIVE_SIGN : ""}${this.numerator / this.divider}`
-    } else if (fract > 0) {
-      let res = (this.numerator * BigInt("1".padEnd(fract + 1, "0")) / this.divider).toString();
+    if (fract >= 0) {
+      // the +2 is one to cover the initial '1' and another to add an extra value on the fractional part for rounding
+      let val = this.numerator * BigInt("1".padEnd(fract + 2, "0")) / this.divider;
 
-      let intPart = res.slice(0, res.length - fract);
-      let fractPart = res.slice(res.length - fract);
+      //Gets the extra value on the fractional part
+      let mod = val % 10n;
+      //Removes it from the final value
+      val -= mod;
+      //If the extra part is between 5-9 then it rounds up
+      if (mod > 4n) {
+        val += 10n
+      }
+
+      let res = val.toString();
+
+      //The -1 are due to the extra value
+      let intPart = res.slice(0, res.length - fract - 1);
+      let fractPart = res.slice(res.length - fract - 1, res.length - 1);
+
       if (trimZeros) {
         let i = fractPart.length - 1;
-        while (i > 0 && fractPart[i] == '0') {
+        while (i >= 0 && fractPart[i] == '0') {
           i--
-        }
-        if (i == 0) {
-          return `${this.isNegative ? NEGATIVE_SIGN : ""}${intPart}`
         }
         fractPart = fractPart.slice(0, i + 1);
       }
 
-      return `${this.isNegative ? NEGATIVE_SIGN : ""}${intPart}.${fractPart}`;
+      return `${this.isNegative ? NEGATIVE_SIGN : ""}${intPart}${fractPart.length ? `.${fractPart}` : ""}`;
+
     } else {
       return `${this.isNegative ? NEGATIVE_SIGN : ""}${this.numerator}${this.divider === 1n ? "" : FRACTION_SEPERATOR + this.divider}`
     }
   }
+}
+
+/**
+ * 
+ * @param {string} value 
+ */
+export function Rational(value) {
+  return RationalNumber.parse(value);
 }
