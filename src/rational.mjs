@@ -40,7 +40,6 @@ export class RationalNumber {
     } else if (divider === 1n) {
       return new RationalNumber(isNegative, numerator, 1n);
     } else {
-      this.isNegative = isNegative;
       let gcd = RationalNumber.gcd(numerator, divider);
       if (gcd === 1n) {
         return new RationalNumber(isNegative, numerator, divider);
@@ -310,9 +309,12 @@ export class RationalNumber {
    * @returns {number}
    */
   toInt() {
+    //TODO add error if it goes beyond the Max Int
     let res = Number(this.numerator / this.divider);
     return this.isNegative ? 0 - res : res;
   }
+
+  //TODO add toNumber and toBigInt
 
   /**
    *
@@ -342,7 +344,8 @@ export class RationalNumber {
         val += 10n
       }
 
-      let res = val.toString();
+      //Pads the start for cases where the resulting value is less than the expected fractional part size
+      let res = val.toString().padStart(fract + 1, '0');
 
       //The -1 are due to the extra value
       let intPart = res.slice(0, res.length - fract - 1) || '0';
@@ -361,6 +364,28 @@ export class RationalNumber {
     } else {
       return `${this.isNegative ? NEGATIVE_SIGN : ""}${this.numerator}${this.divider === 1n ? "" : FRACTION_SEPERATOR + this.divider}`
     }
+  }
+
+  toScientificNotation(fract = 5, trimZeros = false) {
+    let numerator = this.numerator;
+    let divider = this.divider;
+    let exponent = 0;
+    if (this.numerator !== 0n) {
+      let numeratorStr = this.numerator.toString();
+      let dividerStr = this.divider.toString();
+      exponent = numeratorStr.length - dividerStr.length
+
+      if (exponent > 0) {
+        divider = BigInt(dividerStr.padEnd(dividerStr.length + exponent, "0"))
+      } else if (exponent < 0) {
+        numerator = BigInt(numeratorStr.padEnd(numeratorStr.length - exponent, "0"))
+      }
+      if (numerator < divider) {
+        numerator *= 10n;
+        exponent--;
+      }
+    }
+    return `${RationalNumber.create(this.isNegative, numerator, divider).toString(fract, trimZeros)}e${exponent}`
   }
 }
 
