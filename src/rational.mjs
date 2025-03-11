@@ -10,6 +10,29 @@ const SIGNS = [NEGATIVE_SIGN, POSITIVE_SIGN];
 const FRACTION_SEPERATOR = '/';
 const EXPONENT = 'e';
 
+/**
+ * @param {bigint} a 
+ * @param {bigint} b 
+ */
+function gcd(a, b) {
+  let x;
+  while (b != 0n) {
+    x = a;
+    a = b;
+    b = x % b;
+  }
+  return a
+}
+
+/**
+ * @param {bigint} a 
+ * @param {bigint} b 
+ */
+function lcm(a, b) {
+  return a * b / gcd(a, b);
+}
+
+
 export class RationalParseError extends Error { }
 
 export class RationalNumber {
@@ -36,10 +59,10 @@ export class RationalNumber {
       divider = 1n;
     } else if (divider === 1n) {
     } else if (divider !== 1n) {
-      let gcd = RationalNumber.gcd(numerator, divider);
-      if (gcd !== 1n) {
-        numerator = numerator / gcd;
-        divider = divider / gcd;
+      let commonDivider = gcd(numerator, divider);
+      if (commonDivider !== 1n) {
+        numerator = numerator / commonDivider;
+        divider = divider / commonDivider;
       }
     }
 
@@ -53,32 +76,10 @@ export class RationalNumber {
   }
 
   /**
-   * @param {bigint} a 
-   * @param {bigint} b 
-   */
-  static gcd(a, b) {
-    let x;
-    while (b != 0n) {
-      x = a;
-      a = b;
-      b = x % b;
-    }
-    return a
-  }
-
-  /**
-   * @param {bigint} a 
-   * @param {bigint} b 
-   */
-  static lcm(a, b) {
-    return a * b / RationalNumber.gcd(a, b);
-  }
-
-  /**
    * @param {string} input 
    * @returns {RationalNumber}
    */
-  static parse(input) {
+  static parseString(input) {
     let isNegative = false;
     let reader = new StringCharReader(input.trim());
     let n1 = "";
@@ -192,33 +193,53 @@ export class RationalNumber {
   }
 
   /**
+   * 
+   * @param {string|number|bigint} value 
+   */
+  static parse(value) {
+    if (typeof value === "bigint") {
+      return new RationalNumber(false, value, 1n);
+    }
+    return RationalNumber.parseString(value.toString());
+  }
+
+  /**
+   * @param {RationalNumber} r 
+   * @returns {{n1:bigint,n2:bigint,d:bigint}}
+   */
+  #normalizeDividers(r) {
+    let n1 = this.numerator;
+    let n2 = r.numerator;
+    let d = this.divider;
+    if (this.divider !== r.divider) {
+      if (this.divider === 1n) {
+        d = r.divider;
+        n1 *= d;
+      } else if (r.divider === 1n) {
+        n2 *= d;
+      } else {
+        d = lcm(this.divider, r.divider);
+        n1 = d / this.divider * n1;
+        n2 = d / r.divider * n2;
+      }
+    }
+    return { n1, n2, d };
+  }
+
+  /**
    * @param {RationalNumber} r 
    * @returns {RationalNumber}
    */
   add(r) {
     let shouldAdd = this.isNegativeNumber === r.isNegativeNumber;
-    let a = this.numerator;
-    let b = r.numerator;
-    let d = this.divider;
-    if (this.divider !== r.divider) {
-      if (this.divider === 1n) {
-        d = r.divider;
-        a *= d;
-      } else if (r.divider === 1n) {
-        b *= d;
-      } else {
-        d = RationalNumber.lcm(this.divider, r.divider);
-        a = d / this.divider * a;
-        b = d / r.divider * b;
-      }
-    }
+    const { n1, n2, d } = this.#normalizeDividers(r);
     if (shouldAdd) {
-      return new RationalNumber(this.isNegativeNumber, a + b, d);
+      return new RationalNumber(this.isNegativeNumber, n1 + n2, d);
     } else {
-      if (a > b) {
-        return new RationalNumber(this.isNegativeNumber, a - b, d);
+      if (n1 > n2) {
+        return new RationalNumber(this.isNegativeNumber, n1 - n2, d);
       } else {
-        return new RationalNumber(r.isNegativeNumber, b - a, d);
+        return new RationalNumber(r.isNegativeNumber, n2 - n1, d);
       }
     }
   }
@@ -356,12 +377,8 @@ export class RationalNumber {
    */
   less(r) {
     if (this.isNegativeNumber === r.isNegativeNumber) {
-      if (this.divider === r.divider) {
-        return this.numerator < r.numerator;
-      } else {
-        let d = RationalNumber.lcm(this.divider, r.divider);
-        return (d / this.divider * this.numerator) < (d / r.divider * r.numerator);
-      }
+      const { n1, n2 } = this.#normalizeDividers(r);
+      return n1 < n2;
     } else {
       return this.isNegativeNumber;
     }
@@ -373,12 +390,8 @@ export class RationalNumber {
    */
   greater(r) {
     if (this.isNegativeNumber === r.isNegativeNumber) {
-      if (this.divider === r.divider) {
-        return this.numerator > r.numerator;
-      } else {
-        let d = RationalNumber.lcm(this.divider, r.divider);
-        return (d / this.divider * this.numerator) > (d / r.divider * r.numerator);
-      }
+      const { n1, n2 } = this.#normalizeDividers(r);
+      return n1 > n2;
     } else {
       return r.isNegativeNumber;
     }
@@ -396,7 +409,12 @@ export class RationalNumber {
    * @returns {number}
    */
   toInt() {
-    //TODO add error if it goes beyond the Max Int
+    if (this.greater(MAX_JS_INTEGER)) {
+      throw new Error("Number greater than Number.MAX_SAFE_INTEGER")
+    }
+    if (this.less(MIN_JS_INTEGER)) {
+      throw new Error("Number less than Number.MIN_SAFE_INTEGER")
+    }
     let res = Number(this.numerator / this.divider);
     return this.isNegativeNumber ? 0 - res : res;
   }
@@ -478,22 +496,11 @@ export const ZERO = new RationalNumber(false, 0n, 1n);
 export const ONE = new RationalNumber(false, 1n, 1n);
 export const TEN = new RationalNumber(false, 10n, 1n);
 export const MINUS_ONE = new RationalNumber(true, 1n, 1n);
+export const MAX_JS_INTEGER = RationalNumber.parse(Number.MAX_SAFE_INTEGER);
+export const MIN_JS_INTEGER = RationalNumber.parse(Number.MIN_SAFE_INTEGER);
 
-/**
- * 
- * @param {string|number|bigint} value 
- */
-export function Rational(value) {
-  if (typeof value === "bigint") {
-    if (value < 0n) {
-      return new RationalNumber(true, 0n - value, 1n);
-    }
-    return new RationalNumber(false, value, 1n);
-  }
-  return RationalNumber.parse(value.toString());
-}
-
-export const Q = Rational;
+export const Rational = RationalNumber.parse;
+export const Q = RationalNumber.parse;
 
 /**
  * @typedef {"+"|"-"|"*"|"/"|"^"} Op
