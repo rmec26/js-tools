@@ -14,11 +14,35 @@ export class RationalParseError extends Error { }
 
 export class RationalNumber {
   /**
-   * @param {boolean} isNegative 
-   * @param {bigint} numerator 
-   * @param {bigint} divider 
+   * @param {boolean} isNegative
+   * @param {bigint} numerator
+   * @param {bigint} divider
    */
-  constructor(isNegative, numerator, divider) {
+  constructor(isNegative, numerator, divider = 1n) {
+    if (numerator < 0n) {
+      isNegative = !isNegative;
+      numerator = 0n - numerator;
+    }
+    if (divider < 0n) {
+      isNegative = !isNegative;
+      divider = 0n - divider;
+    }
+
+
+    if (divider === 0n) {
+      throw new Error("Divide by Zero");
+    } else if (numerator === 0n) {
+      isNegative = false;
+      divider = 1n;
+    } else if (divider === 1n) {
+    } else if (divider !== 1n) {
+      let gcd = RationalNumber.gcd(numerator, divider);
+      if (gcd !== 1n) {
+        numerator = numerator / gcd;
+        divider = divider / gcd;
+      }
+    }
+
     /** @type {boolean} */
     this.isNegativeNumber = isNegative;
     /** @type {bigint} */
@@ -26,30 +50,6 @@ export class RationalNumber {
     /** @type {bigint} */
     this.divider = divider;
     Object.freeze(this);
-  }
-
-  //TODO consider moving this logic into the constructor
-  //add logic to error on negative numerators and dividers
-  /**
-   * @param {boolean} isNegative 
-   * @param {bigint} numerator 
-   * @param {bigint} divider 
-   */
-  static #create(isNegative, numerator, divider = 1n) {
-    if (divider === 0n) {
-      throw new Error("Divide by Zero");
-    } else if (numerator === 0n) {
-      return ZERO;
-    } else if (divider === 1n) {
-      return new RationalNumber(isNegative, numerator, 1n);
-    } else {
-      let gcd = RationalNumber.gcd(numerator, divider);
-      if (gcd === 1n) {
-        return new RationalNumber(isNegative, numerator, divider);
-      } else {
-        return new RationalNumber(isNegative, numerator / gcd, divider / gcd);
-      }
-    }
   }
 
   /**
@@ -72,19 +72,6 @@ export class RationalNumber {
    */
   static lcm(a, b) {
     return a * b / RationalNumber.gcd(a, b);
-  }
-
-  //TODO possibly remove this, redundant with the Rational() function
-  /**
-   * @param {number} int 
-   * @returns {RationalNumber}
-   */
-  static fromInt(int) {
-    let value = BigInt(int);
-    if (value < 0n) {
-      return new RationalNumber(true, 0n - value, 1n);
-    }
-    return new RationalNumber(false, value, 1n);
   }
 
   /**
@@ -171,14 +158,14 @@ export class RationalNumber {
             }
           }
           if (aux.length) {
-            value = RationalNumber.#create(isNegative, BigInt(n1 + n2), BigInt('1'.padEnd(n2.length + 1, '0')));
+            value = new RationalNumber(isNegative, BigInt(n1 + n2), BigInt('1'.padEnd(n2.length + 1, '0')));
           } else {
-            value = RationalNumber.#create(isNegative, BigInt(n1));
+            value = new RationalNumber(isNegative, BigInt(n1));
           }
         } else {//Its a fraction
           if (n1) {
             if (n2) {
-              value = RationalNumber.#create(isNegative, BigInt(n1), BigInt(n2));
+              value = new RationalNumber(isNegative, BigInt(n1), BigInt(n2));
             } else {
               throw new RationalParseError(`No divider given`);
             }
@@ -187,13 +174,13 @@ export class RationalNumber {
           }
         }
       } else {
-        value = RationalNumber.#create(isNegative, BigInt(n1));
+        value = new RationalNumber(isNegative, BigInt(n1));
       }
       if (n3) {
         if (isNegativeExponent) {
-          return value.div(RationalNumber.#create(false, BigInt('1'.padEnd(parseInt(n3) + 1, '0'))));
+          return value.div(new RationalNumber(false, BigInt('1'.padEnd(parseInt(n3) + 1, '0'))));
         } else {
-          return value.mul(RationalNumber.#create(false, BigInt('1'.padEnd(parseInt(n3) + 1, '0'))));
+          return value.mul(new RationalNumber(false, BigInt('1'.padEnd(parseInt(n3) + 1, '0'))));
         }
       }
       return value;
@@ -226,12 +213,12 @@ export class RationalNumber {
       }
     }
     if (shouldAdd) {
-      return RationalNumber.#create(this.isNegativeNumber, a + b, d);
+      return new RationalNumber(this.isNegativeNumber, a + b, d);
     } else {
       if (a > b) {
-        return RationalNumber.#create(this.isNegativeNumber, a - b, d);
+        return new RationalNumber(this.isNegativeNumber, a - b, d);
       } else {
-        return RationalNumber.#create(r.isNegativeNumber, b - a, d);
+        return new RationalNumber(r.isNegativeNumber, b - a, d);
       }
     }
   }
@@ -257,7 +244,7 @@ export class RationalNumber {
    * @returns {RationalNumber}
    */
   mul(r) {
-    return RationalNumber.#create(this.isNegativeNumber !== r.isNegativeNumber, this.numerator * r.numerator, this.divider * r.divider);
+    return new RationalNumber(this.isNegativeNumber !== r.isNegativeNumber, this.numerator * r.numerator, this.divider * r.divider);
   }
 
   /**
@@ -265,7 +252,7 @@ export class RationalNumber {
    * @returns {RationalNumber}
    */
   div(r) {
-    return RationalNumber.#create(this.isNegativeNumber !== r.isNegativeNumber, this.numerator * r.divider, this.divider * r.numerator);
+    return new RationalNumber(this.isNegativeNumber !== r.isNegativeNumber, this.numerator * r.divider, this.divider * r.numerator);
   }
 
   /**
@@ -306,14 +293,14 @@ export class RationalNumber {
    * @returns {RationalNumber}
    */
   fract() {
-    return RationalNumber.#create(this.isNegativeNumber, this.numerator % this.divider, this.divider);
+    return new RationalNumber(this.isNegativeNumber, this.numerator % this.divider, this.divider);
   }
   /**
    * 
    * @returns {RationalNumber}
    */
   reciprocal() {
-    return RationalNumber.#create(this.isNegativeNumber, this.divider, this.numerator);
+    return new RationalNumber(this.isNegativeNumber, this.divider, this.numerator);
   }
 
   /**
@@ -483,7 +470,7 @@ export class RationalNumber {
         exponent--;
       }
     }
-    return `${RationalNumber.#create(this.isNegativeNumber, numerator, divider).toString(fract, trimZeros)}e${exponent}`
+    return `${new RationalNumber(this.isNegativeNumber, numerator, divider).toString(fract, trimZeros)}e${exponent}`
   }
 }
 
