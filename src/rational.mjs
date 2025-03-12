@@ -409,17 +409,31 @@ export class RationalNumber {
    * @returns {number}
    */
   toInt() {
-    if (this.greater(MAX_JS_INTEGER)) {
+    let intPart = this.trunc();
+    if (intPart.greater(MAX_JS_INTEGER)) {
       throw new Error("Number greater than Number.MAX_SAFE_INTEGER")
     }
-    if (this.less(MIN_JS_INTEGER)) {
+    if (intPart.less(MIN_JS_INTEGER)) {
       throw new Error("Number less than Number.MIN_SAFE_INTEGER")
     }
-    let res = Number(this.numerator / this.divider);
-    return this.isNegativeNumber ? 0 - res : res;
+    let res = Number(intPart.numerator);
+    return intPart.isNegativeNumber ? 0 - res : res;
   }
 
-  //TODO add toNumber
+
+  /**
+   * @returns {number}
+   */
+  toNumber() {
+    if (this.greater(MAX_JS_VALUE)) {
+      throw new Error("Number greater than Number.MAX_JS_VALUE")
+    }
+    if (this.less(NEGATIVE_MAX_JS_VALUE)) {
+      throw new Error("Number less than -Number.MAX_JS_VALUE")
+    }
+    // A 64-bit floating point number has at most 17 significant numbers
+    return Number(this.toScientificNotation(17));
+  }
 
   /**
    *
@@ -498,79 +512,10 @@ export const TEN = new RationalNumber(false, 10n, 1n);
 export const MINUS_ONE = new RationalNumber(true, 1n, 1n);
 export const MAX_JS_INTEGER = RationalNumber.parse(Number.MAX_SAFE_INTEGER);
 export const MIN_JS_INTEGER = RationalNumber.parse(Number.MIN_SAFE_INTEGER);
+export const MAX_JS_VALUE = RationalNumber.parse(Number.MAX_VALUE);
+export const MIN_JS_VALUE = RationalNumber.parse(Number.MIN_VALUE);
+export const NEGATIVE_MAX_JS_VALUE = MAX_JS_VALUE.opposite();
+export const NEGATIVE_MIN_JS_VALUE = MIN_JS_VALUE.opposite();
 
 export const Rational = RationalNumber.parse;
 export const Q = RationalNumber.parse;
-
-/**
- * @typedef {"+"|"-"|"*"|"/"|"^"} Op
- * @typedef {CalcEntry[]} Brackets
- * @typedef {Brackets|Op|RationalNumber|bigint|number|string} CalcEntry
- * @typedef {Brackets|Op|RationalNumber|bigint|number|string} ProcessedEntry
- */
-
-const PRIORITY_2_OPS = ["^"];
-const PRIORITY_1_OPS = ["*", "/"];
-const PRIORITY_0_OPS = ["+", "-"];
-
-const opMap = {
-  "+": "add",
-  "-": "sub",
-  "*": "mul",
-  "/": "div",
-  "^": "pow",
-}
-
-function processOp(value1, value2, op) {
-  return value1[opMap[op]](value2);
-}
-
-/**
- * 
- * @param {(RationalNumber|{op:Op,priority:number})[]} values 
- * @param {*} priority 
- */
-function processCalcPriority(values, priority) {
-  for (let i = 0; i < values.length; i++) {
-    let v = values[i];
-    if (v.priority === priority) {
-      if ((values[i - 1] instanceof RationalNumber) && (values[i + 1] instanceof RationalNumber)) {
-        values.splice(i - 1, 3, processOp(values[i - 1], values[i + 1], v.op))
-        i--;
-      } else {
-        throw Error("missing op values");
-      }
-    }
-  }
-}
-
-/**
- * 
- * @param  {...CalcEntry} values 
- * @returns {RationalNumber}
- */
-export function calc(...values) {
-  let processedInput = values.map(v => {
-    if (v instanceof Array) {
-      return calc(...v);
-    } else if (v instanceof RationalNumber) {
-      return v;
-    } else if (PRIORITY_2_OPS.includes(v)) {
-      return { op: v, priority: 2 };
-    } else if (PRIORITY_1_OPS.includes(v)) {
-      return { op: v, priority: 1 };
-    } else if (PRIORITY_0_OPS.includes(v)) {
-      return { op: v, priority: 0 };
-    } else {
-      return Rational(v);
-    }
-  });
-  processCalcPriority(processedInput, 2);
-  processCalcPriority(processedInput, 1);
-  processCalcPriority(processedInput, 0);
-  if (processedInput.length == 1) {
-    return (/** @type {RationalNumber}*/processedInput[0]);
-  } else {
-    throw Error("too many values");
-  }
-}
