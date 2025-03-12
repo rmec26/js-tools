@@ -502,7 +502,14 @@ export class RationalNumber {
         exponent--;
       }
     }
-    return `${new RationalNumber(this.isNegativeNumber, numerator, divider).toString(fract, trimZeros)}e${exponent}`
+    let toStringResult = new RationalNumber(this.isNegativeNumber, numerator, divider).toString(fract, trimZeros);
+    //This covers the edge case where the value without the exponent is  9.(9) and when converting it to decimal it rounds the final value into 10
+    if (toStringResult.startsWith("10")) {
+      return `1${toStringResult.slice(2)}e${exponent + 1}`;
+    } else if (toStringResult.startsWith("-10")) {
+      return `-1${toStringResult.slice(3)}e${exponent + 1}`;
+    }
+    return `${toStringResult}e${exponent}`
   }
 }
 
