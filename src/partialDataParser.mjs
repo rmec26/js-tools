@@ -28,7 +28,7 @@
  *    keywordProcessor?:StringProcessor,
  *    numberProcessor?:NumberProcessor,
  *    stringProcessor?:StringProcessor,
-*     baseBlock?:BaseBlock,
+ *    baseBlock?:BaseBlock,
  * }} ParserConfig
  * @typedef {{level:any[],block:DataBlock}} StackLevel
  */

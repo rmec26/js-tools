@@ -18,7 +18,7 @@ const termColor = (clr, str) => {
   return str.length ? `\u001b[${clr}m${normalizeAll(str)}\u001b[m` : `\u001b[${clr}m`;
 }
 
-const Color = {
+export const Color = {
   Reset: () => termColor("", []),
   Foreground: {
     Black: (...str) => termColor("30", str),
@@ -96,7 +96,7 @@ function linePrint(line) {
   }
 }
 
-function print(...values) {
+export function print(...values) {
   if (values.length) {
     let lines = normalizeAll(values).split("\n");
     linePrint(lines.shift());
@@ -111,7 +111,7 @@ function print(...values) {
   }
 }
 
-function println(...values) {
+export function println(...values) {
   print(...values, "\n")
 }
 

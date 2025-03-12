@@ -268,7 +268,11 @@ export async function runTests({ outFile = "", paths = [], includes = [] }) {
   const testFiles = getTestList(paths, includes);
 
   for (let test of testFiles) {
-    await import(test)
+    try{
+      await import(test)
+    }catch(e){
+      term.error(`Error while loading test file '${test}':\n${e.stack}`)
+    }
   }
   finalResults()
 }
