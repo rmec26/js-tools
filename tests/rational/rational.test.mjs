@@ -1,8 +1,234 @@
 
 import { describe, test, expect } from "../../src/simpleTest.mjs";
-import { Rational } from "../../src/rational.mjs";
+import { Rational, RationalNumber } from "../../src/rational.mjs";
 
 describe("Rational.mjs", () => {
+  describe("parseString", () => {
+    test("Should parse '0'", () => {
+      expect(RationalNumber.parseString("0")).toEqual({
+        isNegativeNumber: false,
+        numerator: 0n,
+        divider: 1n
+      })
+    })
+    test("Should parse '0/1'", () => {
+      expect(RationalNumber.parseString("0/1")).toEqual({
+        isNegativeNumber: false,
+        numerator: 0n,
+        divider: 1n
+      })
+    })
+    test("Should parse '0/25'", () => {
+      expect(RationalNumber.parseString("0/25")).toEqual({
+        isNegativeNumber: false,
+        numerator: 0n,
+        divider: 1n
+      })
+    })
+    test("Should parse '12'", () => {
+      expect(RationalNumber.parseString("12")).toEqual({
+        isNegativeNumber: false,
+        numerator: 12n,
+        divider: 1n
+      })
+    })
+    test("Should parse '12/25'", () => {
+      expect(RationalNumber.parseString("12/25")).toEqual({
+        isNegativeNumber: false,
+        numerator: 12n,
+        divider: 25n
+      })
+    })
+    test("Should parse '0.25'", () => {
+      expect(RationalNumber.parseString("0.25")).toEqual({
+        isNegativeNumber: false,
+        numerator: 1n,
+        divider: 4n
+      })
+    })
+    test("Should parse '0.025'", () => {
+      expect(RationalNumber.parseString("0.025")).toEqual({
+        isNegativeNumber: false,
+        numerator: 1n,
+        divider: 40n
+      })
+    })
+    test("Should parse '12.25'", () => {
+      expect(RationalNumber.parseString("12.25")).toEqual({
+        isNegativeNumber: false,
+        numerator: 49n,
+        divider: 4n
+      })
+    })
+    test("Should parse '12.0'", () => {
+      expect(RationalNumber.parseString("12.0")).toEqual({
+        isNegativeNumber: false,
+        numerator: 12n,
+        divider: 1n
+      })
+    })
+    test("Should parse '12.025'", () => {
+      expect(RationalNumber.parseString("12.025")).toEqual({
+        isNegativeNumber: false,
+        numerator: 481n,
+        divider: 40n
+      })
+    })
+    test("Should parse '012.250'", () => {
+      expect(RationalNumber.parseString("012.250")).toEqual({
+        isNegativeNumber: false,
+        numerator: 49n,
+        divider: 4n
+      })
+    })
+    test("Should parse '.25'", () => {
+      expect(RationalNumber.parseString(".25")).toEqual({
+        isNegativeNumber: false,
+        numerator: 1n,
+        divider: 4n
+      })
+    })
+    test("Should parse '12,25'", () => {
+      expect(RationalNumber.parseString("12,25")).toEqual({
+        isNegativeNumber: false,
+        numerator: 49n,
+        divider: 4n
+      })
+    })
+    test("Should parse '12.25e3'", () => {
+      expect(RationalNumber.parseString("12.25e3")).toEqual({
+        isNegativeNumber: false,
+        numerator: 12250n,
+        divider: 1n
+      })
+    })
+    test("Should parse '12.25e+3'", () => {
+      expect(RationalNumber.parseString("12.25e+3")).toEqual({
+        isNegativeNumber: false,
+        numerator: 12250n,
+        divider: 1n
+      })
+    })
+    test("Should parse '12.25e-3'", () => {
+      expect(RationalNumber.parseString("12.25e-3")).toEqual({
+        isNegativeNumber: false,
+        numerator: 49n,
+        divider: 4000n
+      })
+    })
+    test("Should parse '-0'", () => {
+      expect(RationalNumber.parseString("-0")).toEqual({
+        isNegativeNumber: false,
+        numerator: 0n,
+        divider: 1n
+      })
+    })
+    test("Should parse '-0/1'", () => {
+      expect(RationalNumber.parseString("-0/1")).toEqual({
+        isNegativeNumber: false,
+        numerator: 0n,
+        divider: 1n
+      })
+    })
+    test("Should parse '-0/25'", () => {
+      expect(RationalNumber.parseString("-0/25")).toEqual({
+        isNegativeNumber: false,
+        numerator: 0n,
+        divider: 1n
+      })
+    })
+    test("Should parse '-12'", () => {
+      expect(RationalNumber.parseString("-12")).toEqual({
+        isNegativeNumber: true,
+        numerator: 12n,
+        divider: 1n
+      })
+    })
+    test("Should parse '-12/25'", () => {
+      expect(RationalNumber.parseString("-12/25")).toEqual({
+        isNegativeNumber: true,
+        numerator: 12n,
+        divider: 25n
+      })
+    })
+    test("Should parse '-0.25'", () => {
+      expect(RationalNumber.parseString("-0.25")).toEqual({
+        isNegativeNumber: true,
+        numerator: 1n,
+        divider: 4n
+      })
+    })
+    test("Should parse '-0.025'", () => {
+      expect(RationalNumber.parseString("-0.025")).toEqual({
+        isNegativeNumber: true,
+        numerator: 1n,
+        divider: 40n
+      })
+    })
+    test("Should parse '-12.25'", () => {
+      expect(RationalNumber.parseString("-12.25")).toEqual({
+        isNegativeNumber: true,
+        numerator: 49n,
+        divider: 4n
+      })
+    })
+    test("Should parse '-12.0'", () => {
+      expect(RationalNumber.parseString("-12.0")).toEqual({
+        isNegativeNumber: true,
+        numerator: 12n,
+        divider: 1n
+      })
+    })
+    test("Should parse '-12.025'", () => {
+      expect(RationalNumber.parseString("-12.025")).toEqual({
+        isNegativeNumber: true,
+        numerator: 481n,
+        divider: 40n
+      })
+    })
+    test("Should parse '-012.250'", () => {
+      expect(RationalNumber.parseString("-012.250")).toEqual({
+        isNegativeNumber: true,
+        numerator: 49n,
+        divider: 4n
+      })
+    })
+    test("Should parse '-.25'", () => {
+      expect(RationalNumber.parseString("-.25")).toEqual({
+        isNegativeNumber: true,
+        numerator: 1n,
+        divider: 4n
+      })
+    })
+    test("Should parse '-12,25'", () => {
+      expect(RationalNumber.parseString("-12,25")).toEqual({
+        isNegativeNumber: true,
+        numerator: 49n,
+        divider: 4n
+      })
+    })
+    test("Should parse '-12.25e3'", () => {
+      expect(RationalNumber.parseString("-12.25e3")).toEqual({
+        isNegativeNumber: true,
+        numerator: 12250n,
+        divider: 1n
+      })
+    })
+    test("Should parse '-12.25e+3'", () => {
+      expect(RationalNumber.parseString("-12.25e+3")).toEqual({
+        isNegativeNumber: true,
+        numerator: 12250n,
+        divider: 1n
+      })
+    })
+    test("Should parse '-12.25e-3'", () => {
+      expect(RationalNumber.parseString("-12.25e-3")).toEqual({
+        isNegativeNumber: true,
+        numerator: 49n,
+        divider: 4000n
+      })
+    })
+  })
   describe("toString", () => {
     const numbers = [
       "0",
