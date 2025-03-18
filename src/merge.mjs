@@ -46,6 +46,7 @@ function addToDiffBlock(state, value) {
     let isKeepValue = value.op === OPS.KEEP;
     if (state.block.isKeep !== isKeepValue) {
       state.block.end = state.linePos;
+      state.block.endChar = state.charPos;
       state.res.push(state.block);
       state.block = { values: [] };
     }
@@ -53,6 +54,7 @@ function addToDiffBlock(state, value) {
   if (!state.block.values.length) {
     state.block.isKeep = value.op === OPS.KEEP;
     state.block.start = state.linePos;
+    state.block.startChar = state.charPos;
   }
   state.block.values.push(value);
 }
@@ -63,6 +65,7 @@ export function diffBlocks(oldValue, newValue) {
   let newPos = 0;
   let state = {
     linePos: 0,
+    charPos: 0,
     res: [],
     block: { values: [] },
   }
@@ -82,6 +85,7 @@ export function diffBlocks(oldValue, newValue) {
       newPos = pos + 1;
     }
     state.linePos++
+    state.charPos += line.length + 1;
   }
   if (newPos < newValueLines.length) {
     for (let i = newPos; i < newValueLines.length; i++) {
@@ -91,9 +95,14 @@ export function diffBlocks(oldValue, newValue) {
 
   if (state.block.values.length) {
     state.block.end = state.linePos;
+    state.block.endChar = state.charPos;
     state.res.push(state.block);
   }
   return state.res;
+}
+
+export function blockSize(block) {
+  return block.lines.reduce((sum, line) => sum + line.length, block.lines.length - 1);
 }
 
 function addToPatchBlock(state, value) {
@@ -101,7 +110,14 @@ function addToPatchBlock(state, value) {
     let isKeepValue = value.op === OPS.KEEP;
     if (state.block.isKeep !== isKeepValue) {
       if (!state.block.isKeep) {
-        state.res.push({ lines: state.block.values, start: state.block.start, end: state.linePos });
+        state.res.push({
+          lines: state.block.values,
+          start: state.block.start,
+          startChar: state.block.startChar,
+          end: state.linePos,
+          endChar: state.charPos,
+          // size: blockSize(state.block.values)
+        });
       }
       state.block = { isNew: true, values: [] };
     }
@@ -110,6 +126,7 @@ function addToPatchBlock(state, value) {
     state.block.isNew = false;
     state.block.isKeep = value.op === OPS.KEEP;
     state.block.start = state.linePos;
+    state.block.startChar = state.charPos;
   }
   if (value.op === OPS.ADD) {
     state.block.values.push(value.value);
@@ -120,6 +137,7 @@ function patchBlocks(oldValue, newValue) {
   let newPos = 0;
   let state = {
     linePos: 0,
+    charPos: 0,
     res: [],
     block: { isNew: true, values: [] },
   }
@@ -138,7 +156,8 @@ function patchBlocks(oldValue, newValue) {
       addToPatchBlock(state, { op: OPS.KEEP, value: newValue[pos] });
       newPos = pos + 1;
     }
-    state.linePos++
+    state.linePos++;
+    state.charPos += line.length + 1;
   }
   if (newPos < newValue.length) {
     for (let i = newPos; i < newValue.length; i++) {
@@ -147,7 +166,14 @@ function patchBlocks(oldValue, newValue) {
   }
 
   if (state.block.values.length && !state.block.isKeep) {
-    state.res.push({ lines: state.block.values, start: state.block.start, end: state.linePos });
+    state.res.push({
+      lines: state.block.values,
+      start: state.block.start,
+      startChar: state.block.startChar,
+      end: state.linePos,
+      endChar: state.charPos-1,
+      // size: blockSize(state.block.values)
+    });
   }
   return state.res;
 }
@@ -246,7 +272,7 @@ export function merge(base, server, local) {
         } else if (blockB.end < blockA.end) {
           blockBConflit.push(baseLines.slice(blockB.end, blockA.end));
           basePos = blockA.end;
-        }else{
+        } else {
           basePos = blockA.end;
         }
         addConflitLines(false, blockBConflit);

@@ -15,6 +15,15 @@ let testLevel = [];
 
 class FailError extends Error { };
 
+function stringify(value, identation) {
+  return JSON.stringify(value, (k, v) => {
+    if (typeof v === "bigint") {
+      return v.toString() + "n";
+    }
+    return v;
+  }, identation)
+}
+
 export function describe(name, fn) {
   const initialCount = testCount;
   const initialPassCount = passCount;
@@ -129,14 +138,14 @@ function diff(expected, actual, path = "") {
       }
     }
   } else if (expected !== actual) {
-    return `expected${path} is ${JSON.stringify(expected)} while actual${path} is ${JSON.stringify(actual)}`;
+    return `expected${path} is ${stringify(expected)} while actual${path} is ${stringify(actual)}`;
   }
   return "";
 }
 
 function isEqual(expected, actual) {
   const fail = reason => {
-    throw new FailError(`${reason}:\nExpected: ${color.Green(JSON.stringify(expected, null, 2))}\n  Actual: ${color.Red(JSON.stringify(actual, null, 2))}`);
+    throw new FailError(`${reason}: \nExpected: ${color.Green(stringify(expected, 2))} \n  Actual: ${color.Red(stringify(actual, 2))} `);
   }
   const expectedType = typeOf(expected);
   const actualType = typeOf(actual);
@@ -268,12 +277,23 @@ export async function runTests({ outFile = "", paths = [], includes = [] }) {
   const testFiles = getTestList(paths, includes);
 
   for (let test of testFiles) {
-    try{
+    try {
       await import(test)
-    }catch(e){
+    } catch (e) {
       term.error(`Error while loading test file '${test}':\n${e.stack}`)
     }
   }
   finalResults()
 }
 
+
+//make all functions capture the input if the start tests hasn't been ran before and run them in order after
+//make all functions be async capable
+
+// function describe(name, fn){
+//   if(!hasStarted){
+//     todo.push(["describe",[name,fn]]);
+//   }else{
+//     ...normal code
+//   }
+// }
