@@ -15,7 +15,6 @@
  * @typedef {{startFn:StartBlockFn,processFn:ProcessBlockFn,endFn:EndBlockFn}} BaseBlock
  * @typedef {{start:string,end:string}} CommentBlock
  * @typedef {(str:string)=>any} StringProcessor
- * @typedef {(num:number)=>any} NumberProcessor
  * @typedef {(value:any)=>any} BaseProcessor
  * @typedef {{
  *    keywords?:KeywordMap,
@@ -26,12 +25,26 @@
  *    inlineComments?:string[],
  *    commentBlocks?:CommentBlock[],
  *    keywordProcessor?:StringProcessor,
- *    numberProcessor?:NumberProcessor,
  *    stringProcessor?:StringProcessor,
  *    baseBlock?:BaseBlock,
  * }} ParserConfig
  * @typedef {{level:any[],block:DataBlock}} StackLevel
  */
+
+/**
+ * 
+ * @param {(keyword:string)=>any} otherProcessor 
+ * @returns {(input:string)=>any}
+ */
+function createNumberOrOtherProcessor(otherProcessor = input => input) {
+  return (input) => {
+    let num = new Number(input).valueOf();
+    if (!Number.isNaN(num)) {
+      return num;
+    }
+    return otherProcessor(input);
+  }
+}
 
 export class PDParser {
   static MODE_NORMAL = 1;
@@ -52,8 +65,7 @@ export class PDParser {
     blocks = [],
     inlineComments = [],
     commentBlocks = [],
-    keywordProcessor = (input) => input,
-    numberProcessor = (input) => input,
+    keywordProcessor = createNumberOrOtherProcessor(),
     stringProcessor = (input) => input,
     baseBlock = { startFn: () => [], processFn: (state, value) => state.push(value), endFn: (state) => state }
   }) {
@@ -135,8 +147,6 @@ export class PDParser {
 
     /** @type {StringProcessor} */
     this.keywordProcessor = keywordProcessor;
-    /** @type {NumberProcessor} */
-    this.numberProcessor = numberProcessor;
     /** @type {StringProcessor} */
     this.stringProcessor = stringProcessor;
     /** @type {BaseBlock} */
@@ -152,16 +162,6 @@ export class PDParser {
   }
   _processNormalBuffer() {
     if (this.buffer.length) {
-      //checks if its a number
-      if (this.bufferAfterEscape === 0) {
-        let num = new Number(this.buffer).valueOf();
-        if (!Number.isNaN(num)) {
-          this._addValueToLevel(this.numberProcessor(num));
-          this._resetBuffer();
-          return;
-        }
-      }
-
       if (this.valueKeywords[this.buffer]) {
         this._addValueToLevel(this.valueKeywords[this.buffer]);
         this._resetBuffer();
@@ -173,6 +173,8 @@ export class PDParser {
         this._resetBuffer();
         return;
       }
+
+      //TODO CHECK PREFIX BLOCK START HERE
 
       this._addValueToLevel(this.keywordProcessor(this.buffer));
       this._resetBuffer();
@@ -366,6 +368,7 @@ export class PDParser {
                 if (!this._startStartEndBlock()) {
                   //check if a Start End block is ending
                   this._endStartEndBlock();
+                  //TODO CHECK SUFFIX BLOCK START HERE
                 }
               }
             }
@@ -377,6 +380,7 @@ export class PDParser {
   _parseStringMode() {
     if (!this._parseEscapeMode()) {
       this.buffer += this.currentChar;
+      //TODO review this, the endswith supports receiving an end position
       if (this.buffer.slice(this.bufferAfterEscape).endsWith(this.modeEndSequence)) {
         this._addValueToLevel(this.stringProcessor(this.buffer.slice(0, -this.modeEndSequence.length)));
         this._startNormal();
@@ -552,7 +556,6 @@ function jsParserType(value) {
   } else {
     return "value";
   }
-  //TODO add keyword
 }
 
 
@@ -640,7 +643,7 @@ export class JsObjectParser extends PDParser {
       ],
       inlineComments: ["//"],
       commentBlocks: [{ start: "/*", end: "*/" }],
-      keywordProcessor: value => new JsKeyword(value),
+      keywordProcessor: createNumberOrOtherProcessor(value => new JsKeyword(value)),
       baseBlock: {
         startFn: () => ({ value: undefined }),
         processFn: (state, value) => {
