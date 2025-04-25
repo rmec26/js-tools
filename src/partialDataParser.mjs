@@ -508,6 +508,32 @@ export class PDParser {
   }
 }
 
+/**
+ * Creates a processor function for the given steps.
+ * 
+ * @param {(value:any)=>string} typeGetter function that converts the current value into a type string that will be used to check if the value is valid for the current step
+ * @param {{[key:string]:(state:{step:number,[key:string]:any},value:any)=>void}[]} steps Array of objects that define the valid types of each step and their respective processor functions.
+ * @returns {(state:{step:number,[key:string]:any},value:any)=>void}
+ */
+function generateStepProcessor(typeGetter, steps) {
+  /** @type {(state:{step:number,[key:string]:any},value:any)=>void} */
+  return (state, value) => {
+    let type = typeGetter(value);
+
+    if (steps[state.step][type]) {
+      steps[state.step][type](state, value);
+    } else {
+      throw new Error(`Expected to be '${Object.keys(steps[state.step]).join("' or '")}', got '${type}'`);
+    }
+
+    if (state.step == steps.length - 1) {
+      state.step = 0;
+    } else {
+      state.step++;
+    }
+  }
+}
+
 
 export class JsonLikeParser extends PDParser {
   constructor() {
@@ -571,42 +597,21 @@ export class JsObjectParser extends PDParser {
         {
           name: "Object", start: "{", end: "}",
           startFn: () => ({ step: 0, param: null, result: {} }),
-          processFn: (state, value) => {
-            let type = jsParserType(value);
-            switch (state.step) {
-              case 0:
-                if (type == "value") {
-                  state.param = value.toString();
-                } else if (type == "keyword") {
-                  state.param = value.keyword;
-                } else {
-                  throw new Error(`Expected param to be 'value' or 'keyword', got '${type}'`);
-                }
-                break;
-              case 1:
-                if (type != ":") {
-                  throw new Error(`Expected ':', got '${type}'`);
-                }
-                break;
-              case 2:
-                if (type == "value") {
-                  state.result[state.param] = value;
-                } else {
-                  throw new Error(`Expected value, got '${type}'`);
-                }
-                break;
-              case 3:
-                if (type != ",") {
-                  throw new Error(`Expected ',', got '${type}'`);
-                }
-                break;
+          processFn: generateStepProcessor(jsParserType, [
+            {
+              "value": (state, value) => state.param = value.toString(),
+              "keyword": (state, value) => state.param = value.keyword,
+            },
+            {
+              ":": () => { }
+            },
+            {
+              "value": (state, value) => state.result[state.param] = value
+            },
+            {
+              ",": () => { }
             }
-            if (state.step == 3) {
-              state.step = 0;
-            } else {
-              state.step++;
-            }
-          },
+          ]),
           endFn: (state) => {
             return state.result;
           }
@@ -614,28 +619,14 @@ export class JsObjectParser extends PDParser {
         {
           name: "Array", start: "[", end: "]",
           startFn: () => ({ step: 0, result: [] }),
-          processFn: (state, value) => {
-            let type = jsParserType(value);
-            switch (state.step) {
-              case 0:
-                if (type == "value") {
-                  state.result.push(value);
-                } else {
-                  throw new Error(`Expected 'value', got '${type}'`);
-                }
-                break;
-              case 1:
-                if (type != ",") {
-                  throw new Error(`Expected ',', got '${type}'`);
-                }
-                break;
+          processFn: generateStepProcessor(jsParserType, [
+            {
+              "value": (state, value) => state.result.push(value)
+            },
+            {
+              ",": () => { },
             }
-            if (state.step == 1) {
-              state.step = 0;
-            } else {
-              state.step++;
-            }
-          },
+          ]),
           endFn: (state) => {
             return state.result;
           }
