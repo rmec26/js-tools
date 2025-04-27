@@ -16,10 +16,9 @@
  * @typedef {{start:string,end:string}} CommentBlock
  * @typedef {(str:string)=>any} StringProcessor
  * @typedef {(value:any)=>any} BaseProcessor
+ * @typedef {"value"|"start"|"end"} KeywordSeperatorType
  * @typedef {{
- *    keywords?:KeywordMap,
- *    seperatorKeywords?:KeywordMap,
- *    seperators?:string[],
+ *    syntax?:(Keyword|Seperator)[]
  *    stringLimiters?:string[],
  *    blocks?:DataBlock[],
  *    inlineComments?:string[],
@@ -30,6 +29,181 @@
  * }} ParserConfig
  * @typedef {{level:any[],block:DataBlock}} StackLevel
  */
+
+
+class Keyword {
+  /**
+   * 
+   * @param {string} value 
+   * @returns {[true,any]|[false]}
+   */
+  process(value) {
+    return [false]
+  }
+}
+
+class BaseKeyword extends Keyword {
+  /**
+   * 
+   * @param {string} expected 
+   * @param {(()=>any)|any} [result]
+   */
+  constructor(expected, result) {
+    super();
+    /** @type {string} */
+    this.expected = expected;
+    /** @type {()=>any} */
+    this.result = result instanceof Function ? result : () => result;
+  }
+  /**
+   * 
+   * @param {string} value 
+   * @returns {[true,any]|[false]}
+   */
+  process(value) {
+    return value === this.expected ? [true, this.result()] : [false];
+  }
+}
+
+class PrefixKeyword extends Keyword {
+  /**
+   * 
+   * @param {string} expected 
+   * @param {((value:string)=>any)|any} [result]
+   */
+  constructor(expected, result) {
+    super();
+    /** @type {string} */
+    this.expected = expected;
+    /** @type {(value:string)=>any} */
+    this.result = result instanceof Function ? result : () => result;
+  }
+  /**
+   * 
+   * @param {string} value 
+   * @returns {[true,any]|[false]}
+   */
+  process(value) {
+    return value.startsWith(this.expected) ? [true, this.result(value.slice(this.expected.length))] : [false];
+  }
+}
+
+class SuffixKeyword extends Keyword {
+  /**
+   * 
+   * @param {string} expected 
+   * @param {((value:string)=>any)|any} [result]
+   */
+  constructor(expected, result) {
+    super();
+    /** @type {string} */
+    this.expected = expected;
+    /** @type {(value:string)=>any} */
+    this.result = result instanceof Function ? result : () => result;
+  }
+  /**
+   * 
+   * @param {string} value 
+   * @returns {[true,any]|[false]}
+   */
+  process(value) {
+    return value.endsWith(this.expected) ? [true, this.result(value.slice(0, -this.expected.length))] : [false];
+  }
+}
+
+class Seperator {
+  /**
+   * 
+   * @param {string} buffer 
+   * @returns {[true,string,any?]|[false]}
+   */
+  process(buffer) {
+    return [false];
+  }
+}
+
+class SingleSeperator extends Seperator {
+  /**
+   * 
+   * @param {string} expected 
+   * @param {(()=>any)|any} [result]
+   */
+  constructor(expected, result) {
+    super();
+    /** @type {string} */
+    this.expected = expected;
+    /** @type {()=>any} */
+    this.result = result instanceof Function ? result : () => result;
+  }
+  /**
+   * 
+   * @param {string} buffer 
+   * @returns {[true,string,any]|[false]}
+   */
+  process(buffer) {
+    return buffer.endsWith(this.expected) ? [true, buffer.slice(0, -this.expected.length), this.result()] : [false];
+  }
+}
+
+class MultiSeperator extends Seperator {
+  /**
+   * 
+   * @param {string[]} expected 
+   */
+  constructor(expected) {
+    super();
+    /** @type {string[]} */
+    this.expected = expected;
+  }
+  /**
+   * 
+   * @param {string} buffer 
+   * @returns {[true,string]|[false]}
+   */
+  process(buffer) {
+    for (const sep of this.expected) {
+      if (buffer.endsWith(sep)) {
+        return [true, buffer.slice(0, -sep.length)];
+      }
+    }
+    return [false]
+  }
+}
+
+
+/**
+ * 
+ * @param {string} expected 
+ * @param {(()=>any)|any} [result]
+ */
+Keyword.Base = (expected, result) => new BaseKeyword(expected, result);
+
+/**
+ * 
+ * @param {string} expected 
+ * @param {((value:string)=>any)|any} [result]
+ */
+Keyword.Prefix = (expected, result) => new PrefixKeyword(expected, result);
+
+/**
+ * 
+ * @param {string} expected 
+ * @param {((value:string)=>any)|any} [result]
+ */
+Keyword.Suffix = (expected, result) => new SuffixKeyword(expected, result);
+
+/**
+ * 
+ * @param {string} expected 
+ * @param {(()=>any)|any} [result]
+ */
+Seperator.Single = (expected, result) => new SingleSeperator(expected, result);
+
+/**
+ * 
+ * @param {string[]} expected 
+ */
+Seperator.Multi = (...expected) => new MultiSeperator(expected);
 
 /**
  * 
@@ -58,9 +232,7 @@ export class PDParser {
    * @param {ParserConfig} config 
    */
   constructor({
-    keywords = {},
-    seperatorKeywords = {},
-    seperators = [],
+    syntax = [],
     stringLimiters = [],
     blocks = [],
     inlineComments = [],
@@ -71,8 +243,6 @@ export class PDParser {
   }) {
 
     //TODO have a clone system that supports functions
-    // keywords = structuredClone(keywords);
-    // seperators = structuredClone(seperators);
     // stringLimiters = structuredClone(stringLimiters);
     // blocks = structuredClone(blocks);
     // inlineComments = structuredClone(inlineComments);
@@ -103,25 +273,21 @@ export class PDParser {
     this.bufferAfterEscape = 0;
     /** @type {string} */
     this.currentChar = "";
-
-    /** @type {ValueKeywordMap} */
-    this.valueKeywords = {};
-    /** @type {FunctionKeywordMap} */
-    this.functionKeywords = {};
-    for (const [k, v] of Object.entries(keywords)) {
-      if (v instanceof Function) {
-        this.functionKeywords[k] = v;
-      } else {
-        this.valueKeywords[k] = v;
-      }
-    }
-
-    /** @type {KeywordList} */
-    this.seperatorKeywords = Object.entries(seperatorKeywords);
-    /** @type {string[]} */
-    this.seperators = seperators;
     /** @type {string[]} */
     this.stringLimiters = stringLimiters;
+
+    /** @type {{type:KeywordSeperatorType,seperator:Seperator}[]} */
+    this.seperators2 = [];
+    /** @type {{type:KeywordSeperatorType,keyword:Keyword}[]} */
+    this.keywords2 = [];
+
+    for (const entry of syntax) {
+      if (entry instanceof Seperator) {
+        this.seperators2.push({ type: "value", seperator: entry });
+      } else if (entry instanceof Keyword) {
+        this.keywords2.push({ type: "value", keyword: entry });
+      }
+    }
 
     /** @type {DataBlock[]} */
     this.seperatorBlocks = [];
@@ -162,54 +328,63 @@ export class PDParser {
   }
   _processNormalBuffer() {
     if (this.buffer.length) {
-      if (this.valueKeywords[this.buffer]) {
-        this._addValueToLevel(this.valueKeywords[this.buffer]);
-        this._resetBuffer();
-        return;
+      //TODO check if it matches the current end here, if end is a keyword
+      for (const { type, keyword } of this.keywords2) {
+        const [match, value] = keyword.process(this.buffer);
+        if (match) {
+          this._resetBuffer();
+          switch (type) {
+            case "value":
+              //Adds possible keyword value
+              this._addValueToLevel(value);
+              break;
+            case "start":
+              //TODO Start block here
+              break;
+            case "end":
+              //TODO Throw error because its not the expected end
+              break;
+          }
+          return;
+        }
       }
-
-      if (this.functionKeywords[this.buffer]) {
-        this._addValueToLevel(this.functionKeywords[this.buffer]());
-        this._resetBuffer();
-        return;
-      }
-
-      //TODO CHECK PREFIX BLOCK START HERE
 
       this._addValueToLevel(this.keywordProcessor(this.buffer));
       this._resetBuffer();
     }
   }
+
   /**
+   * TODO fix doc
    * Checks if the buffer is ending with a valid seperator, if true processes the remaining buffer before it and returns true, returns false if no seperator exists
    * @returns 
    */
-  _checkSeperator() {
-    for (const sep of this.seperators) {
-      if (this._checkBufferEnd(sep)) {
-        return true;
-      }
-    }
-    return false;
-  }
-
-  /**
-   * Checks if the buffer is ending with a valid seperator keyword, if true processes the remaining buffer before it, adds the keyword result and returns true, returns false if no seperator exists
-   * @returns 
-   */
-  _checkSeperatorKeyword() {
-    for (const [sep, valFn] of this.seperatorKeywords) {
-      if (this._checkBufferEnd(sep)) {
-        if (valFn instanceof Function) {
-          this._addValueToLevel(valFn());
-        } else {
-          this._addValueToLevel(valFn);
+  _checkSeperator2() {
+    //TODO check if it matches the current end here, if end is a seperator
+    for (const { type, seperator } of this.seperators2) {
+      const [match, buffer, value] = seperator.process(this.buffer);
+      if (match) {
+        this.buffer = buffer;
+        //Processes the remaining buffer
+        this._processNormalBuffer();
+        switch (type) {
+          case "value":
+            //Adds possible seperator value
+            this._addValueToLevel(value);
+            break;
+          case "start":
+            //TODO Start block here
+            break;
+          case "end":
+            //TODO Throw error because its not the expected end
+            break;
         }
         return true;
       }
     }
     return false;
   }
+
   /**
    * Checks if the buffer ends with the given value, if true removes said value from the buffer, processes the remaining buffer, resets it and returns true, else it returs false.
    * @param {*} endValue 
@@ -271,7 +446,9 @@ export class PDParser {
     this.levelBlock = newBlock;
   }
   _addValueToLevel(value) {
-    this.levelBlock.processFn(this.currentLevel, value);
+    if (value !== undefined) {
+      this.levelBlock.processFn(this.currentLevel, value);
+    }
   }
   _endLevel() {
     const result = this.levelBlock.endFn(this.currentLevel);
@@ -355,21 +532,17 @@ export class PDParser {
     if (!this._parseEscapeMode()) {
       this.buffer += this.currentChar;
       //check if a seperator exists
-      if (!this._checkSeperator()) {
-        //check if a seperator Keyword exists
-        if (!this._checkSeperatorKeyword()) {
-          //check if a string is starting
-          if (!this._startString()) {
-            //check if a comment block is starting
-            if (!this._startCommentBlock()) {
-              //check if a Seperator block is starting or ending
-              if (!this._checkSeperatorBlock()) {
-                //check if a Start End block is starting
-                if (!this._startStartEndBlock()) {
-                  //check if a Start End block is ending
-                  this._endStartEndBlock();
-                  //TODO CHECK SUFFIX BLOCK START HERE
-                }
+      if (!this._checkSeperator2()) {
+        //check if a string is starting
+        if (!this._startString()) {
+          //check if a comment block is starting
+          if (!this._startCommentBlock()) {
+            //check if a Seperator block is starting or ending
+            if (!this._checkSeperatorBlock()) {
+              //check if a Start End block is starting
+              if (!this._startStartEndBlock()) {
+                //check if a Start End block is ending
+                this._endStartEndBlock();
               }
             }
           }
@@ -380,7 +553,6 @@ export class PDParser {
   _parseStringMode() {
     if (!this._parseEscapeMode()) {
       this.buffer += this.currentChar;
-      //TODO review this, the endswith supports receiving an end position
       if (this.buffer.slice(this.bufferAfterEscape).endsWith(this.modeEndSequence)) {
         this._addValueToLevel(this.stringProcessor(this.buffer.slice(0, -this.modeEndSequence.length)));
         this._startNormal();
@@ -508,6 +680,8 @@ export class PDParser {
   }
 }
 
+//TODO create a proper type for the step object
+//TODO Consider allowing for a way to define branching step paths d
 /**
  * Creates a processor function for the given steps.
  * 
@@ -538,8 +712,13 @@ function generateStepProcessor(typeGetter, steps) {
 export class JsonLikeParser extends PDParser {
   constructor() {
     super({
-      keywords: { "true": true, "false": false, "null": null, "NaN": NaN },
-      seperators: [' ', '\t', '\n', '\r', ',', ':'],
+      syntax: [
+        Seperator.Multi(' ', '\t', '\n', '\r', ',', ':'),
+        Keyword.Base("true", true),
+        Keyword.Base("false", false),
+        Keyword.Base("null", null),
+        Keyword.Base("NaN", NaN),
+      ],
       stringLimiters: ['"'],
       blocks: [
         {
@@ -589,9 +768,15 @@ function jsParserType(value) {
 export class JsObjectParser extends PDParser {
   constructor() {
     super({
-      keywords: { "true": true, "false": false, "null": null, "NaN": NaN },
-      seperators: [' ', '\t', '\n', '\r'],
-      seperatorKeywords: { ",": COMMA, ":": COLON },
+      syntax: [
+        Seperator.Multi(' ', '\t', '\n', '\r'),
+        Seperator.Single(',', COMMA),
+        Seperator.Single(':', COLON),
+        Keyword.Base("true", true),
+        Keyword.Base("false", false),
+        Keyword.Base("null", null),
+        Keyword.Base("NaN", NaN),
+      ],
       stringLimiters: ['"'],
       blocks: [
         {
@@ -663,8 +848,13 @@ export class JsObjectParser extends PDParser {
 export class LispLikeParser extends PDParser {
   constructor() {
     super({
-      keywords: { "true": true, "false": false, "null": null, "NaN": NaN },
-      seperators: [' ', '\t', '\n', '\r', ','],
+      syntax: [
+        Seperator.Multi(' ', '\t', '\n', '\r', ','),
+        Keyword.Base("true", true),
+        Keyword.Base("false", false),
+        Keyword.Base("null", null),
+        Keyword.Base("NaN", NaN),
+      ],
       stringLimiters: ['"'],
       blocks: [
         { name: "List", start: "(", end: ")", startFn: () => [], processFn: (state, value) => state.push(value), endFn: (values) => values }
