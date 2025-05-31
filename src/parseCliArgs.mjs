@@ -8,7 +8,7 @@
 /** @typedef {{[key:string]:OptionType|Option}} OptionMap */
 /** @typedef {{[key:string]:Mapping}} MappingMap */
 
-/** @typedef {{options?:OptionMap,mappings?:MappingMap,caseSensitive?:boolean,failUnknowFlags?:boolean,prefix?:string,setter?:string,argList?:string,hifenToCamel?:boolean,autoHelp?:boolean,autoSingleChar?:boolean}} CliConfig */
+/** @typedef {{options?:OptionMap,mappings?:MappingMap,caseSensitive?:boolean,prefix?:string,multiPrefix?:string,setter?:string,argList?:string,hifenToCamel?:boolean,autoHelp?:boolean,autoSingleChar?:boolean}} CliConfig */
 
 
 /** @typedef {{name:string,description:string}} BaseOption */
@@ -23,7 +23,7 @@
 /** @typedef  {{[key:string]:ProcessedOption}} ProcessedOptionMap */
 
 
-/** @typedef {{options:ProcessedOptionMap,caseSensitive:boolean,failUnknowFlags:boolean,prefix:string,setter:string|null,argList:string,hifenToCamel:boolean,baseResult:{[key:string]:any}}} CompiledCliConfig */
+/** @typedef {{options:ProcessedOptionMap,caseSensitive:boolean,prefix:string,multiPrefix:string,setter:string|null,argList:string,hifenToCamel:boolean,baseResult:{[key:string]:any}}} CompiledCliConfig */
 
 
 /**
@@ -61,7 +61,7 @@ function generateInputExample(type, min, max, seperator) {
  * @param {number|null} max 
  * @param {string} seperator 
  */
-function generateDescription(prefix, alias, description, type, min, max, seperator) {
+function generateDescription(prefix, alias, description, type, min, max, seperator) {//TODO properlly render cases where the multiPrefix is valid
   return `${alias.map(a => prefix + a).join(" ")}${generateInputExample(type, min, max, seperator)}${typeof description === "string" ? " -> " + description : ""}`;//"TODO description with given text,type aliases and default value";
 }
 
@@ -71,7 +71,10 @@ function generateDescription(prefix, alias, description, type, min, max, seperat
  * @param {CliConfig} config
  * @returns {CompiledCliConfig}
  */
-function compileCliOptions({ options = {}, mappings = {}, caseSensitive = true, failUnknowFlags = true, prefix = "--", setter = "=", argList = "_args", hifenToCamel = false, autoHelp = true, autoSingleChar = false } = {}) {
+function compileCliOptions({ options = {}, mappings = {}, caseSensitive = true, prefix = "--", multiPrefix = "-", setter = "=", argList = "_args", hifenToCamel = false, autoHelp = true, autoSingleChar = false } = {}) {
+  if (prefix == multiPrefix) {
+    throw new Error(`Prefix and MultiPrefix are the same.`)
+  }
   const baseResult = {};
 
   /** @type {ProcessedOptionMap} */
@@ -122,7 +125,7 @@ function compileCliOptions({ options = {}, mappings = {}, caseSensitive = true, 
       }
     }
     //Sets the initial value for the option
-    baseResult[name] = type === "Flag" ? false : null
+    baseResult[name] = type === "Flag" ? false : val.defaultValue !== undefined ? val.defaultValue : null
   }
 
   //process the mappings here
@@ -157,7 +160,7 @@ function compileCliOptions({ options = {}, mappings = {}, caseSensitive = true, 
     baseResult[argList] = [];
   }
 
-  return { options: processedOptionMap, caseSensitive, failUnknowFlags, prefix, setter, hifenToCamel, baseResult, argList }
+  return { options: processedOptionMap, caseSensitive, prefix, multiPrefix, setter, hifenToCamel, baseResult, argList }
 }
 
 /**
@@ -170,7 +173,20 @@ function processCliArguments(config, args) {
   args = structuredClone(args);
   while (args.length) {
     let curr = args.shift();
-    if (curr?.startsWith(config.prefix)) {
+    let isPrefix = curr.startsWith(config.prefix);
+    let isMultiPrefix = curr.startsWith(config.multiPrefix);
+
+    //if both prefixes match it means that one of them is the extension of the other
+    //consideering that, on those cases only the longer one will be treated as matching
+    if (isPrefix && isMultiPrefix) {
+      if (config.prefix.length > config.multiPrefix.length) {
+        isMultiPrefix = false;
+      } else {
+        isPrefix = false;
+      }
+    }
+
+    if (isPrefix) {
       let value;
       curr = curr.slice(config.prefix.length);
       const setterPos = config.setter ? curr.indexOf(config.setter) : -1;
@@ -212,12 +228,12 @@ function processCliArguments(config, args) {
           switch (opc.type) {
             case "String":
               if (opc.min !== null) {
-                if (value?.length < opc.min) {
+                if (value.length < opc.min) {
                   throw new Error(`${config.prefix}${curr} value must be at least ${opc.min} characters long.`);
                 }
               }
               if (opc.max !== null) {
-                if (value?.length < opc.max) {
+                if (value.length < opc.max) {
                   throw new Error(`${config.prefix}${curr} value must not be over ${opc.max} characters long.`);
                 }
               }
@@ -257,12 +273,12 @@ function processCliArguments(config, args) {
             case "List":
               value = value.split(opc.seperator);
               if (opc.min !== null) {
-                if (value?.length < opc.min) {
+                if (value.length < opc.min) {
                   throw new Error(`${config.prefix}${curr} list must have at least ${opc.min} values.`);
                 }
               }
               if (opc.max !== null) {
-                if (value?.length < opc.max) {
+                if (value.length < opc.max) {
                   throw new Error(`${config.prefix}${curr} list must not hvae over ${opc.max} values.`);
                 }
               }
@@ -279,6 +295,29 @@ function processCliArguments(config, args) {
         throw new Error(`${config.prefix}${curr} is not a valid option.`)
       }
 
+    } else if (isMultiPrefix) {
+      curr = curr.slice(config.multiPrefix.length);
+
+      if (!config.caseSensitive) {
+        curr = curr.toLocaleLowerCase();
+      }
+      for (const c of curr) {
+        if (config.options[c]) {
+
+          const opc = config.options[c];
+
+          if (opc.type == "Flag") {
+            result[opc.name] = true;
+          } else if (opc.type == "Mapping") {
+            result[opc.option] = opc.value;
+          } else {
+            throw new Error(`${config.multiPrefix}${c} is not a Flag or Mapping option.`)
+          }
+        } else {
+          throw new Error(`${config.multiPrefix}${c} is not a valid option.`)
+        }
+
+      }
     } else {
       result[config.argList].push(curr);
     }
@@ -304,7 +343,6 @@ function parseCliArgs(config = {}) {
 
 
 /**
- * make the system use the default values
  * setter string that defines the value of the option, e.g. setter '='  --test=123 would convert to {test:"123"} 
  * most values are initialized to null, except the Flag type, that is set to false
  * argList is the name of the parameter that stores all non option arguments
@@ -323,4 +361,4 @@ tecnically the prefix and setter also need to be converted if is set to case ins
  */
 
 
-parseCliArgs({ options: { test: { alias: ["T"], type: "Number", description: "test flag" } }, mappings: { one: { option: "test", value: 1, alias: "t" } } })
+parseCliArgs({ options: { test: { alias: ["T"], type: "Number", description: "test flag" } }, mappings: { one: { option: "Test", value: 1, alias: "t" } } })
