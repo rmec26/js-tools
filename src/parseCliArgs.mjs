@@ -54,6 +54,7 @@ function generateInputExample(type, min, max, seperator) {
 /**
  * 
  * @param {string} prefix 
+ * @param {string} multiPrefix 
  * @param {string[]} alias 
  * @param {string|undefined} description
  * @param {OptionType|"Mapping"} type 
@@ -61,10 +62,9 @@ function generateInputExample(type, min, max, seperator) {
  * @param {number|null} max 
  * @param {string} seperator 
  */
-function generateDescription(prefix, alias, description, type, min, max, seperator) {//TODO properlly render cases where the multiPrefix is valid
-  return `${alias.map(a => prefix + a).join(" ")}${generateInputExample(type, min, max, seperator)}${typeof description === "string" ? " -> " + description : ""}`;//"TODO description with given text,type aliases and default value";
+function generateDescription(prefix, multiPrefix, alias, description, type, min, max, seperator) {
+  return `${alias.map(a => (a.length === 1 && (type == "Flag" || type == "Mapping") ? multiPrefix : prefix) + a).join(" ")}${generateInputExample(type, min, max, seperator)}${typeof description === "string" ? " -> " + description : ""}`;//"TODO description with given text,type aliases and default value";
 }
-
 
 /**
  * 
@@ -98,7 +98,7 @@ function compileCliOptions({ options = {}, mappings = {}, caseSensitive = true, 
       throw new Error(`Error parsing '${name}' option: Minimum is greated than the Maximum`)
     }
     //TODO consider adding the default value in the description
-    const description = generateDescription(prefix, alias, val.description, type, min, max, seperator);//"TODO description with given text,type aliases and default value";
+    const description = generateDescription(prefix, multiPrefix, alias, val.description, type, min, max, seperator);//"TODO description with given text,type aliases and default value";
 
     /** @type {ProcessedOption} */
     let processedOption
@@ -135,7 +135,7 @@ function compileCliOptions({ options = {}, mappings = {}, caseSensitive = true, 
       alias = alias.map(a => a.toLocaleLowerCase())
       name = alias[0];
     }
-    const description = generateDescription(prefix, alias, mapping.description, "Mapping", null, null, "");
+    const description = generateDescription(prefix, multiPrefix, alias, mapping.description, "Mapping", null, null, "");
     const option = caseSensitive ? mapping.option : mapping.option.toLocaleLowerCase();
 
     if (!Object.hasOwn(baseResult, option)) {
@@ -347,17 +347,7 @@ function parseCliArgs(config = {}) {
  * most values are initialized to null, except the Flag type, that is set to false
  * argList is the name of the parameter that stores all non option arguments
  * 
- * have the single char be a specific thing with its own prefix to allow multiple, only flag types or mappings are supported
-
- * only allow a single prefix
-
- * to simplify the way single letter options work simply make that if a name or alias is a single char it can work with the single char system
- * the part above cant work like that, a single char option, that work like '-la' cannot receive any input, it must be a flag or a mapping
- * but it might work as long as the help text generator is aware that it should only work like that only for flags and mappings and the same for the system that will process the input
-
  * have a parameter to fail on non option args or make it so that is defined by the setting or not of the argList parameter
-
-tecnically the prefix and setter also need to be converted if is set to case insensitive or to keep it simple (aka what is going to happen) consider that those are ALWAYS case sensitive
  */
 
 
