@@ -11,7 +11,7 @@
 /** @typedef {{options?:OptionMap,mappings?:MappingMap,caseSensitive?:boolean,prefix?:string,multiPrefix?:string,setter?:string,argList?:string,hifenToCamel?:boolean,autoHelp?:boolean,autoSingleChar?:boolean}} CliConfig */
 
 
-/** @typedef {{name:string,description:string}} BaseOption */
+/** @typedef {{name:string}} BaseOption */
 /** @typedef {BaseOption & {min:number|null,max:number|null}} SizedOption */
 
 /** @typedef {SizedOption & {type:"List",seperator:string}} ListOption */
@@ -23,7 +23,7 @@
 /** @typedef  {{[key:string]:ProcessedOption}} ProcessedOptionMap */
 
 
-/** @typedef {{options:ProcessedOptionMap,caseSensitive:boolean,prefix:string,multiPrefix:string,setter:string|null,argList:string,hifenToCamel:boolean,baseResult:{[key:string]:any}}} CompiledCliConfig */
+/** @typedef {{options:ProcessedOptionMap,caseSensitive:boolean,prefix:string,multiPrefix:string,setter:string|null,argList:string,hifenToCamel:boolean,baseResult:{[key:string]:any},helpText:string}} CompiledCliConfig */
 
 
 /**
@@ -32,17 +32,29 @@
  * @param {number|null} min 
  * @param {number|null} max 
  * @param {string} seperator 
+ * @param {any} [defaultValue] 
  */
-function generateInputExample(type, min, max, seperator) {
+function generateInputExample(type, min, max, seperator, defaultValue) {
+  let minMax = []
+  if (min !== null) {
+    minMax.push(`min:${min}`)
+  }
+  if (max !== null) {
+    minMax.push(`max:${max}`)
+  }
+  if (defaultValue !== undefined) {
+    minMax.push(`default:${JSON.stringify(defaultValue)}`)
+  }
+  const suffix = minMax.length ? ` {${minMax.join(",")}}` : ""
   switch (type) {
     case "String":
-      return ' "value"'
+      return ` <String>${suffix}`
     case "Number":
-      return ' <12.3>'
+      return ` <Number>${suffix}`
     case "Integer":
-      return ' <123>'
+      return ` <Integer>${suffix}`
     case "List":
-      return ` "${["val1", "val2", "..."].join(seperator)}`
+      return ` <${["val1", "val2", "..."].join(seperator)}>${suffix}`
     case "Bool":
       return " <true|false>"
     case "Flag":
@@ -61,9 +73,10 @@ function generateInputExample(type, min, max, seperator) {
  * @param {number|null} min 
  * @param {number|null} max 
  * @param {string} seperator 
+ * @param {any} [defaultValue] 
  */
-function generateDescription(prefix, multiPrefix, alias, description, type, min, max, seperator) {
-  return `${alias.map(a => (a.length === 1 && (type == "Flag" || type == "Mapping") ? multiPrefix : prefix) + a).join(" ")}${generateInputExample(type, min, max, seperator)}${typeof description === "string" ? " -> " + description : ""}`;//"TODO description with given text,type aliases and default value";
+function generateDescription(prefix, multiPrefix, alias, description, type, min, max, seperator, defaultValue) {
+  return `${alias.map(a => (a.length === 1 && (type == "Flag" || type == "Mapping") ? multiPrefix : prefix) + a).join(" ")}${generateInputExample(type, min, max, seperator, defaultValue)}${typeof description === "string" ? "\t" + description : ""}`;
 }
 
 /**
@@ -72,6 +85,7 @@ function generateDescription(prefix, multiPrefix, alias, description, type, min,
  * @returns {CompiledCliConfig}
  */
 export function compileCliOptions({ options = {}, mappings = {}, caseSensitive = true, prefix = "--", multiPrefix = "-", setter = "=", argList = "_args", hifenToCamel = false, autoHelp = true, autoSingleChar = false } = {}) {
+  const helpText = ["Available Options:\n"]
   if (prefix == multiPrefix) {
     throw new Error(`Prefix and MultiPrefix are the same.`)
   }
@@ -97,8 +111,10 @@ export function compileCliOptions({ options = {}, mappings = {}, caseSensitive =
     if (min !== null && max !== null && max > min) {
       throw new Error(`Error parsing '${name}' option: Minimum is greated than the Maximum`)
     }
-    //TODO consider adding the default value in the description
-    const description = generateDescription(prefix, multiPrefix, alias, val.description, type, min, max, seperator);//"TODO description with given text,type aliases and default value";
+
+    const description = generateDescription(prefix, multiPrefix, alias, val.description, type, min, max, seperator, val.defaultValue);
+
+    helpText.push(description);
 
     /** @type {ProcessedOption} */
     let processedOption
@@ -106,14 +122,14 @@ export function compileCliOptions({ options = {}, mappings = {}, caseSensitive =
       case "String":
       case "Number":
       case "Integer":
-        processedOption = { name, type, min, max, description };
+        processedOption = { name, type, min, max };
         break;
       case "List":
-        processedOption = { name, type, min, max, description, seperator };
+        processedOption = { name, type, min, max, seperator };
         break;
       case "Bool":
       case "Flag":
-        processedOption = { name, type, description };
+        processedOption = { name, type };
         break;
     }
 
@@ -138,12 +154,14 @@ export function compileCliOptions({ options = {}, mappings = {}, caseSensitive =
     const description = generateDescription(prefix, multiPrefix, alias, mapping.description, "Mapping", null, null, "");
     const option = caseSensitive ? mapping.option : mapping.option.toLocaleLowerCase();
 
+    helpText.push(description);
+
     if (!Object.hasOwn(baseResult, option)) {
       baseResult[option] = null
     }
 
     /** @type {MappingOption} */
-    let processedOption = { name, type: "Mapping", option, description, value: mapping.value };
+    let processedOption = { name, type: "Mapping", option, value: mapping.value };
     for (let a of alias) {
       if (processedOptionMap[a]) {
         throw new Error(`'${a}' is already used by option/mapping '${processedOptionMap[a].name}'`)
@@ -153,14 +171,14 @@ export function compileCliOptions({ options = {}, mappings = {}, caseSensitive =
     }
   }
 
-  //Checks if there isn't any imcompatibility between the argsList and any options
+  //Checks if there isn't any incompatibility between the argsList and any options
   if (Object.hasOwn(baseResult, argList)) {
     throw new Error(`The given argsList value '${argList}' is used by an option/mapping already.`)
   } else {
     baseResult[argList] = [];
   }
 
-  return { options: processedOptionMap, caseSensitive, prefix, multiPrefix, setter, hifenToCamel, baseResult, argList }
+  return { options: processedOptionMap, caseSensitive, prefix, multiPrefix, setter, hifenToCamel, baseResult, argList, helpText: helpText.join("\n\n") }
 }
 
 /**
@@ -334,11 +352,14 @@ export function parseCliArgs(config = {}) {
   let args = process.argv.slice(2);
   const compiledConfig = compileCliOptions(config);
 
-  console.dir(compiledConfig, { depth: 5 })
+  //TODO remove debug code
+  // console.dir(compiledConfig, { depth: 5 })
+
+  // console.log(compiledConfig.helpText)
 
   const result = processCliArguments(compiledConfig, args);
-  //check and process the actual args
-  console.log(result)
+
+  return result;
 }
 
 
@@ -350,5 +371,7 @@ export function parseCliArgs(config = {}) {
  * have a parameter to fail on non option args or make it so that is defined by the setting or not of the argList parameter
  * 
  * maybe remove the description from the option themselves and just create a single help text, change the auto help to simply define the help option, or just completly ignore it and just make it get from the result and show it if the flag is true
+ * or force the help as always on
+ * perhaps make it auto define certain things by the os being used, e.g. use --arg=val on unix and /arg:val on win
  * TODO add flag to show help on processError
  */
