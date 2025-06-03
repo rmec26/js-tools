@@ -71,7 +71,7 @@ function generateDescription(prefix, multiPrefix, alias, description, type, min,
  * @param {CliConfig} config
  * @returns {CompiledCliConfig}
  */
-function compileCliOptions({ options = {}, mappings = {}, caseSensitive = true, prefix = "--", multiPrefix = "-", setter = "=", argList = "_args", hifenToCamel = false, autoHelp = true, autoSingleChar = false } = {}) {
+export function compileCliOptions({ options = {}, mappings = {}, caseSensitive = true, prefix = "--", multiPrefix = "-", setter = "=", argList = "_args", hifenToCamel = false, autoHelp = true, autoSingleChar = false } = {}) {
   if (prefix == multiPrefix) {
     throw new Error(`Prefix and MultiPrefix are the same.`)
   }
@@ -168,7 +168,7 @@ function compileCliOptions({ options = {}, mappings = {}, caseSensitive = true, 
  * @param {CompiledCliConfig} config
  * @param {string[]} args
  */
-function processCliArguments(config, args) {
+export function processCliArguments(config, args) {
   let result = structuredClone(config.baseResult)
   args = structuredClone(args);
   while (args.length) {
@@ -330,7 +330,7 @@ function processCliArguments(config, args) {
  * 
  * @param {CliConfig} config
  */
-function parseCliArgs(config = {}) {
+export function parseCliArgs(config = {}) {
   let args = process.argv.slice(2);
   const compiledConfig = compileCliOptions(config);
 
@@ -348,7 +348,7 @@ function parseCliArgs(config = {}) {
  * argList is the name of the parameter that stores all non option arguments
  * 
  * have a parameter to fail on non option args or make it so that is defined by the setting or not of the argList parameter
+ * 
+ * maybe remove the description from the option themselves and just create a single help text, change the auto help to simply define the help option, or just completly ignore it and just make it get from the result and show it if the flag is true
+ * TODO add flag to show help on processError
  */
-
-
-parseCliArgs({ options: { test: { alias: ["T"], type: "Number", description: "test flag" } }, mappings: { one: { option: "Test", value: 1, alias: "t" } } })
