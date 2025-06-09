@@ -1,8 +1,9 @@
 //@ts-check
 
 
-/** @typedef {"String"|"Number"|"Integer"|"List"|"Bool"|"Flag"} OptionType */
-/** @typedef {{type?:OptionType,min?:number,max?:number,alias?:string|string[],defaultValue?:any,seperator?:string,description?:string}} Option */
+/** @typedef {"String"|"Number"|"Integer"|"List"|"NumberList"|"IntegerList"|"Bool"|"Flag"} OptionType */
+/** @typedef {{lessOrEqual?:number,lessEqual?:number,lte?:number,less?:number,lt?:number,greaterOrEqual?:number,greaterEqual?:number,gte?:number,greater?:number,gt?:number}} Limits */
+/** @typedef {{type?:OptionType,alias?:string|string[],defaultValue?:any,seperator?:string,description?:string,valueLimits?:Limits}&Limits} Option */
 /** @typedef {{option:string,value:any,alias?:string|string[],description?:string}} Mapping */
 
 /** @typedef {{[key:string]:OptionType|Option}} OptionMap */
@@ -10,11 +11,11 @@
 
 /** @typedef {{options?:OptionMap,mappings?:MappingMap,caseSensitive?:boolean,prefix?:string,multiPrefix?:string,setter?:string,argList?:string,hifenToCamel?:boolean,autoHelp?:boolean,autoSingleChar?:boolean}} CliConfig */
 
+/** @typedef {{lessOrEqual:number|null,less:number|null,greaterOrEqual:number|null,greater:number|null}} CompiledLimits */
 
 /** @typedef {{name:string}} BaseOption */
-/** @typedef {BaseOption & {min:number|null,max:number|null}} SizedOption */
-
-/** @typedef {SizedOption & {type:"List",seperator:string}} ListOption */
+/** @typedef {BaseOption & CompiledLimits} SizedOption */
+/** @typedef {SizedOption & {type:"List"|"NumberList"|"IntegerList",seperator:string,valueLimits:CompiledLimits}} ListOption */
 /** @typedef {SizedOption & {type:"Number"|"Integer"|"String"}} SizeOnlyOption */
 /** @typedef {BaseOption & {type:"Bool"|"Flag"|"Help"}} SimpleOption */
 /** @typedef {BaseOption & {type:"Mapping",option:string,value:any}} MappingOption */
@@ -29,23 +30,27 @@
 /**
  * 
  * @param {OptionType|"Mapping"} type 
- * @param {number|null} min 
- * @param {number|null} max 
+ * @param {CompiledLimits} limits  
  * @param {string} seperator 
  * @param {any} [defaultValue] 
  */
-function generateInputExample(type, min, max, seperator, defaultValue) {
-  let minMax = []
-  if (min !== null) {
-    minMax.push(`min:${min}`)
+function generateInputExample(type, limits, seperator, defaultValue) {
+  //TODO add the contraints into the list values
+  let constraints = []
+  if (limits.greaterOrEqual !== null) {
+    constraints.push(`greaterOrEqual:${limits.greaterOrEqual}`)
+  } else if (limits.greater !== null) {
+    constraints.push(`greater:${limits.greater}`)
   }
-  if (max !== null) {
-    minMax.push(`max:${max}`)
+  if (limits.lessOrEqual !== null) {
+    constraints.push(`lessOrEqual:${limits.lessOrEqual}`)
+  } else if (limits.less !== null) {
+    constraints.push(`less:${limits.less}`)
   }
   if (defaultValue !== undefined) {
-    minMax.push(`default:${JSON.stringify(defaultValue)}`)
+    constraints.push(`default:${JSON.stringify(defaultValue)}`)
   }
-  const suffix = minMax.length ? ` {${minMax.join(",")}}` : ""
+  const suffix = constraints.length ? ` {${constraints.join(",")}}` : ""
   switch (type) {
     case "String":
       return ` <String>${suffix}`
@@ -54,6 +59,8 @@ function generateInputExample(type, min, max, seperator, defaultValue) {
     case "Integer":
       return ` <Integer>${suffix}`
     case "List":
+    case "NumberList":
+    case "IntegerList":
       return ` <${["val1", "val2", "..."].join(seperator)}>${suffix}`
     case "Bool":
       return " <true|false>"
@@ -70,13 +77,63 @@ function generateInputExample(type, min, max, seperator, defaultValue) {
  * @param {string[]} alias 
  * @param {string|undefined} description
  * @param {OptionType|"Mapping"} type 
- * @param {number|null} min 
- * @param {number|null} max 
+ * @param {CompiledLimits} limits
  * @param {string} seperator 
  * @param {any} [defaultValue] 
  */
-function generateDescription(prefix, multiPrefix, alias, description, type, min, max, seperator, defaultValue) {
-  return `${alias.map(a => (a.length === 1 && (type == "Flag" || type == "Mapping") ? multiPrefix : prefix) + a).join(" ")}${generateInputExample(type, min, max, seperator, defaultValue)}${typeof description === "string" ? "\t" + description : ""}`;
+function generateDescription(prefix, multiPrefix, alias, description, type, limits, seperator, defaultValue) {
+  return `${alias.map(a => (a.length === 1 && (type == "Flag" || type == "Mapping") ? multiPrefix : prefix) + a).join(" ")}${generateInputExample(type, limits, seperator, defaultValue)}${typeof description === "string" ? "\t" + description : ""}`;
+}
+
+/**
+ * 
+ * @param {Limits} [obj] 
+ * @param {string} [obj] 
+ * @returns {CompiledLimits}
+ */
+function compileLimits(obj, errorPrefix = "") {
+  /** @type {CompiledLimits} */
+  const result = { greaterOrEqual: null, greater: null, lessOrEqual: null, less: null };
+  if (obj) {
+    if (typeof obj.greaterOrEqual == "number") {
+      result.greaterOrEqual = obj.greaterOrEqual;
+    } else if (typeof obj.greaterEqual == "number") {
+      result.greaterOrEqual = obj.greaterEqual;
+    } else if (typeof obj.gte == "number") {
+      result.greaterOrEqual = obj.gte;
+    } else if (typeof obj.greater == "number") {
+      result.greater = obj.greater;
+    } else if (typeof obj.gt == "number") {
+      result.greater = obj.gt;
+    }
+
+    if (typeof obj.lessOrEqual == "number") {
+      result.lessOrEqual = obj.lessOrEqual;
+    } else if (typeof obj.lessEqual == "number") {
+      result.lessOrEqual = obj.lessEqual;
+    } else if (typeof obj.lte == "number") {
+      result.lessOrEqual = obj.lte;
+    } else if (typeof obj.less == "number") {
+      result.less = obj.less;
+    } else if (typeof obj.lt == "number") {
+      result.less = obj.lt;
+    }
+
+    if (result.greaterOrEqual !== null) {
+      if (result.lessOrEqual !== null && result.greaterOrEqual > result.lessOrEqual) {
+        throw new Error(`${errorPrefix}greaterOrEqual(${result.greaterOrEqual}) > lessOrEqual(${result.lessOrEqual})`)
+      } else if (result.less !== null && result.greaterOrEqual >= result.less) {
+        throw new Error(`${errorPrefix}greaterOrEqual(${result.greaterOrEqual}) >= less(${result.less})`)
+      }
+    } else if (result.greater !== null) {
+      if (result.lessOrEqual !== null && result.greater >= result.lessOrEqual) {
+        throw new Error(`${errorPrefix}greater(${result.greater}) >= lessOrEqual(${result.lessOrEqual})`)
+      } else if (result.less !== null && result.greater >= result.less) {
+        throw new Error(`${errorPrefix}greater(${result.greater}) >= less(${result.less})`)
+      }
+    }
+  }
+  return result;
 }
 
 /**
@@ -106,13 +163,10 @@ export function compileCliOptions({ options = {}, mappings = {}, caseSensitive =
       name = alias[0];
     }
     const seperator = typeof val.seperator === "string" ? val.seperator : ",";
-    const min = typeof val.min === "number" ? val.min : null;
-    const max = typeof val.max === "number" ? val.max : null;
-    if (min !== null && max !== null && max > min) {
-      throw new Error(`Error parsing '${name}' option: Minimum is greated than the Maximum`)
-    }
+    const limits = compileLimits(val, `Error parsing '${name}' option limits: `);
+    const valueLimits = compileLimits(val.valueLimits, `Error parsing '${name}' option value limits: `);
 
-    const description = generateDescription(prefix, multiPrefix, alias, val.description, type, min, max, seperator, val.defaultValue);
+    const description = generateDescription(prefix, multiPrefix, alias, val.description, type, limits, seperator, val.defaultValue);
 
     helpText.push(description);
 
@@ -122,10 +176,12 @@ export function compileCliOptions({ options = {}, mappings = {}, caseSensitive =
       case "String":
       case "Number":
       case "Integer":
-        processedOption = { name, type, min, max };
+        processedOption = { name, type, ...limits };
         break;
       case "List":
-        processedOption = { name, type, min, max, seperator };
+      case "NumberList":
+      case "IntegerList":
+        processedOption = { name, type, seperator, ...limits, valueLimits };
         break;
       case "Bool":
       case "Flag":
@@ -151,7 +207,7 @@ export function compileCliOptions({ options = {}, mappings = {}, caseSensitive =
       alias = alias.map(a => a.toLocaleLowerCase())
       name = alias[0];
     }
-    const description = generateDescription(prefix, multiPrefix, alias, mapping.description, "Mapping", null, null, "");
+    const description = generateDescription(prefix, multiPrefix, alias, mapping.description, "Mapping", compileLimits(), "");
     const option = caseSensitive ? mapping.option : mapping.option.toLocaleLowerCase();
 
     helpText.push(description);
@@ -188,6 +244,34 @@ export function compileCliOptions({ options = {}, mappings = {}, caseSensitive =
 function showHelp(config) {
   console.log(config.helpText)
   process.exit(0);
+}
+
+/**
+ * 
+ * @param {number} value 
+ * @param {CompiledLimits} limits 
+ * @param {string} limits 
+ */
+function validateLimits(value, limits, errorPrefix, errorSuffix) {
+  if (limits.greaterOrEqual !== null) {
+    if (value < limits.greaterOrEqual) {
+      throw new Error(`${errorPrefix}must be at least ${limits.greaterOrEqual}${errorSuffix}`);
+    }
+  } else if (limits.greater !== null) {
+    if (value <= limits.greater) {
+      throw new Error(`${errorPrefix}must be greater than ${limits.greater}${errorSuffix}`);
+    }
+  }
+
+  if (limits.lessOrEqual !== null) {
+    if (value > limits.lessOrEqual) {
+      throw new Error(`${errorPrefix}must not be over ${limits.lessOrEqual}${errorSuffix}`);
+    }
+  } else if (limits.less !== null) {
+    if (value <= limits.less) {
+      throw new Error(`${errorPrefix}must be less than ${limits.less}${errorSuffix}`);
+    }
+  }
 }
 
 /**
@@ -255,61 +339,48 @@ export function processCliArguments(config, args) {
 
             switch (opc.type) {
               case "String":
-                if (opc.min !== null) {
-                  if (value.length < opc.min) {
-                    throw new Error(`${config.prefix}${curr} value must be at least ${opc.min} characters long.`);
-                  }
-                }
-                if (opc.max !== null) {
-                  if (value.length < opc.max) {
-                    throw new Error(`${config.prefix}${curr} value must not be over ${opc.max} characters long.`);
-                  }
-                }
+                validateLimits(value.length, opc, `${config.prefix}${curr} value `, " characters long.");
                 break;
               case "Number":
                 value = Number(value);
                 if (Number.isNaN(value)) {
                   throw new Error(`${config.prefix}${curr} value must be a number.`);
                 }
-                if (opc.min !== null) {
-                  if (value < opc.min) {
-                    throw new Error(`${config.prefix}${curr} value must be at least ${opc.min}.`);
-                  }
-                }
-                if (opc.max !== null) {
-                  if (value < opc.max) {
-                    throw new Error(`${config.prefix}${curr} value must not be over ${opc.max}.`);
-                  }
-                }
+                validateLimits(value, opc, `${config.prefix}${curr} value `, "");
                 break;
               case "Integer":
                 value = Number(value);
                 if (Number.isNaN(value) || Math.trunc(value) !== value) {
                   throw new Error(`${config.prefix}${curr} value must be an integer.`);
                 }
-                if (opc.min !== null) {
-                  if (value < opc.min) {
-                    throw new Error(`${config.prefix}${curr} value must be at least ${opc.min}.`);
-                  }
-                }
-                if (opc.max !== null) {
-                  if (value < opc.max) {
-                    throw new Error(`${config.prefix}${curr} value must not be over ${opc.max}.`);
-                  }
-                }
+                validateLimits(value, opc, `${config.prefix}${curr} value `, "");
                 break;
               case "List":
                 value = value.split(opc.seperator);
-                if (opc.min !== null) {
-                  if (value.length < opc.min) {
-                    throw new Error(`${config.prefix}${curr} list must have at least ${opc.min} values.`);
+                validateLimits(value.length, opc, `${config.prefix}${curr} value `, " values long.");
+                value.forEach((v, i) => validateLimits(v.length, opc, `${config.prefix}${curr}[${i}] value `, " characters long."))
+                break;
+              case "NumberList":
+                value = value.split(opc.seperator).map((v, i) => {
+                  v = Number(v);
+                  if (Number.isNaN(v)) {
+                    throw new Error(`${config.prefix}${curr}[${i}] value must be a number.`);
                   }
-                }
-                if (opc.max !== null) {
-                  if (value.length < opc.max) {
-                    throw new Error(`${config.prefix}${curr} list must not hvae over ${opc.max} values.`);
+                  validateLimits(v, opc.valueLimits, `${config.prefix}${curr}[${i}] value `, "");
+                  return v;
+                });
+                validateLimits(value.length, opc, `${config.prefix}${curr} value `, " values long.");
+                break;
+              case "IntegerList":
+                value = value.split(opc.seperator).map((v, i) => {
+                  v = Number(v);
+                  if (Number.isNaN(v) || Math.trunc(v) !== v) {
+                    throw new Error(`${config.prefix}${curr}[${i}] value must be an integer.`);
                   }
-                }
+                  validateLimits(v, opc.valueLimits, `${config.prefix}${curr}[${i}] value `, "");
+                  return v;
+                });
+                validateLimits(value.length, opc, `${config.prefix}${curr} value `, " values long.");
                 break;
               case "Bool":
                 value = value.toLocaleLowerCase();
@@ -356,7 +427,8 @@ export function processCliArguments(config, args) {
     return result;
   } catch (e) {
     console.log(`Error: ${e.message}\n`);
-    showHelp(config);
+    process.exit(1)
+    // showHelp(config);
   }
 }
 
