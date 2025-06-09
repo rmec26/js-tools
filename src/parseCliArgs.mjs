@@ -16,7 +16,7 @@
 
 /** @typedef {SizedOption & {type:"List",seperator:string}} ListOption */
 /** @typedef {SizedOption & {type:"Number"|"Integer"|"String"}} SizeOnlyOption */
-/** @typedef {BaseOption & {type:"Bool"|"Flag"}} SimpleOption */
+/** @typedef {BaseOption & {type:"Bool"|"Flag"|"Help"}} SimpleOption */
 /** @typedef {BaseOption & {type:"Mapping",option:string,value:any}} MappingOption */
 /** @typedef {ListOption|SizeOnlyOption|SimpleOption|MappingOption} ProcessedOption */
 
@@ -184,163 +184,180 @@ export function compileCliOptions({ options = {}, mappings = {}, caseSensitive =
 /**
  * 
  * @param {CompiledCliConfig} config
+ */
+function showHelp(config) {
+  console.log(config.helpText)
+  process.exit(0);
+}
+
+/**
+ * 
+ * @param {CompiledCliConfig} config
  * @param {string[]} args
  */
 export function processCliArguments(config, args) {
-  let result = structuredClone(config.baseResult)
-  args = structuredClone(args);
-  while (args.length) {
-    let curr = args.shift();
-    let isPrefix = curr.startsWith(config.prefix);
-    let isMultiPrefix = curr.startsWith(config.multiPrefix);
+  try {
+    let result = structuredClone(config.baseResult)
+    args = structuredClone(args);
+    while (args.length) {
+      let curr = args.shift();
+      let isPrefix = curr.startsWith(config.prefix);
+      let isMultiPrefix = curr.startsWith(config.multiPrefix);
 
-    //if both prefixes match it means that one of them is the extension of the other
-    //consideering that, on those cases only the longer one will be treated as matching
-    if (isPrefix && isMultiPrefix) {
-      if (config.prefix.length > config.multiPrefix.length) {
-        isMultiPrefix = false;
-      } else {
-        isPrefix = false;
-      }
-    }
-
-    if (isPrefix) {
-      let value;
-      curr = curr.slice(config.prefix.length);
-      const setterPos = config.setter ? curr.indexOf(config.setter) : -1;
-
-      //is the setter format
-      if (setterPos !== -1) {
-        value = curr.slice(setterPos + config.setter.length);
-        curr = curr.slice(0, setterPos);
-      }
-
-      if (!config.caseSensitive) {
-        curr = curr.toLocaleLowerCase();
-      }
-
-      if (config.options[curr]) {
-        //in processing check if is flag/mapping or another
-        // if flag mapping check that the values wasnt set, if it was fail because you can't set a flag/mapping value, if not process is as expected for the flag or mapping
-        // for the other types if the value hasnt been set, check that one exists oin the args and set it as the value to process, else throw an error
-        // after that if a value exist just proces it depending on the type and do the necessary checks
-        const opc = config.options[curr];
-        if (opc.type === "Flag" || opc.type === "Mapping") {
-          if (value !== undefined) {
-            throw new Error(`${config.prefix}${curr} is a ${opc.type} option meaning it can't have a value set to it by using ${config.setter}.`);
-          }
-          if (opc.type == "Flag") {
-            result[opc.name] = true;
-          } else {
-            result[opc.option] = opc.value;
-          }
+      //if both prefixes match it means that one of them is the extension of the other
+      //consideering that, on those cases only the longer one will be treated as matching
+      if (isPrefix && isMultiPrefix) {
+        if (config.prefix.length > config.multiPrefix.length) {
+          isMultiPrefix = false;
         } else {
-          if (value === undefined) {
-            if (args.length) {
-              value = args.shift();
-            } else {
-              throw new Error(`No value given for ${config.prefix}${curr}`);
+          isPrefix = false;
+        }
+      }
+
+      if (isPrefix) {
+        let value;
+        curr = curr.slice(config.prefix.length);
+        const setterPos = config.setter ? curr.indexOf(config.setter) : -1;
+
+        //is the setter format
+        if (setterPos !== -1) {
+          value = curr.slice(setterPos + config.setter.length);
+          curr = curr.slice(0, setterPos);
+        }
+
+        if (!config.caseSensitive) {
+          curr = curr.toLocaleLowerCase();
+        }
+
+        if (config.options[curr]) {
+          //in processing check if is flag/mapping or another
+          // if flag mapping check that the values wasnt set, if it was fail because you can't set a flag/mapping value, if not process is as expected for the flag or mapping
+          // for the other types if the value hasnt been set, check that one exists oin the args and set it as the value to process, else throw an error
+          // after that if a value exist just proces it depending on the type and do the necessary checks
+          const opc = config.options[curr];
+          if (opc.type === "Flag" || opc.type === "Mapping") {
+            if (value !== undefined) {
+              throw new Error(`${config.prefix}${curr} is a ${opc.type} option meaning it can't have a value set to it by using ${config.setter}.`);
             }
-          }
-
-          switch (opc.type) {
-            case "String":
-              if (opc.min !== null) {
-                if (value.length < opc.min) {
-                  throw new Error(`${config.prefix}${curr} value must be at least ${opc.min} characters long.`);
-                }
-              }
-              if (opc.max !== null) {
-                if (value.length < opc.max) {
-                  throw new Error(`${config.prefix}${curr} value must not be over ${opc.max} characters long.`);
-                }
-              }
-              break;
-            case "Number":
-              value = Number(value);
-              if (Number.isNaN(value)) {
-                throw new Error(`${config.prefix}${curr} value must be a number.`);
-              }
-              if (opc.min !== null) {
-                if (value < opc.min) {
-                  throw new Error(`${config.prefix}${curr} value must be at least ${opc.min}.`);
-                }
-              }
-              if (opc.max !== null) {
-                if (value < opc.max) {
-                  throw new Error(`${config.prefix}${curr} value must not be over ${opc.max}.`);
-                }
-              }
-              break;
-            case "Integer":
-              value = Number(value);
-              if (Number.isNaN(value) || Math.trunc(value) !== value) {
-                throw new Error(`${config.prefix}${curr} value must be an integer.`);
-              }
-              if (opc.min !== null) {
-                if (value < opc.min) {
-                  throw new Error(`${config.prefix}${curr} value must be at least ${opc.min}.`);
-                }
-              }
-              if (opc.max !== null) {
-                if (value < opc.max) {
-                  throw new Error(`${config.prefix}${curr} value must not be over ${opc.max}.`);
-                }
-              }
-              break;
-            case "List":
-              value = value.split(opc.seperator);
-              if (opc.min !== null) {
-                if (value.length < opc.min) {
-                  throw new Error(`${config.prefix}${curr} list must have at least ${opc.min} values.`);
-                }
-              }
-              if (opc.max !== null) {
-                if (value.length < opc.max) {
-                  throw new Error(`${config.prefix}${curr} list must not hvae over ${opc.max} values.`);
-                }
-              }
-              break;
-            case "Bool":
-              value = value.toLocaleLowerCase();
-              value = value === "true" || value === "yes" || value === "y" || (!Number.isNaN(Number(value)) && Number(value) !== 0)//any non zero number will be considered as a true value
-              break;
-          }
-
-          result[opc.name] = value;
-        }
-      } else {
-        throw new Error(`${config.prefix}${curr} is not a valid option.`)
-      }
-
-    } else if (isMultiPrefix) {
-      curr = curr.slice(config.multiPrefix.length);
-
-      if (!config.caseSensitive) {
-        curr = curr.toLocaleLowerCase();
-      }
-      for (const c of curr) {
-        if (config.options[c]) {
-
-          const opc = config.options[c];
-
-          if (opc.type == "Flag") {
-            result[opc.name] = true;
-          } else if (opc.type == "Mapping") {
-            result[opc.option] = opc.value;
+            if (opc.type == "Flag") {
+              result[opc.name] = true;
+            } else {
+              result[opc.option] = opc.value;
+            }
           } else {
-            throw new Error(`${config.multiPrefix}${c} is not a Flag or Mapping option.`)
+            if (value === undefined) {
+              if (args.length) {
+                value = args.shift();
+              } else {
+                throw new Error(`No value given for ${config.prefix}${curr}`);
+              }
+            }
+
+            switch (opc.type) {
+              case "String":
+                if (opc.min !== null) {
+                  if (value.length < opc.min) {
+                    throw new Error(`${config.prefix}${curr} value must be at least ${opc.min} characters long.`);
+                  }
+                }
+                if (opc.max !== null) {
+                  if (value.length < opc.max) {
+                    throw new Error(`${config.prefix}${curr} value must not be over ${opc.max} characters long.`);
+                  }
+                }
+                break;
+              case "Number":
+                value = Number(value);
+                if (Number.isNaN(value)) {
+                  throw new Error(`${config.prefix}${curr} value must be a number.`);
+                }
+                if (opc.min !== null) {
+                  if (value < opc.min) {
+                    throw new Error(`${config.prefix}${curr} value must be at least ${opc.min}.`);
+                  }
+                }
+                if (opc.max !== null) {
+                  if (value < opc.max) {
+                    throw new Error(`${config.prefix}${curr} value must not be over ${opc.max}.`);
+                  }
+                }
+                break;
+              case "Integer":
+                value = Number(value);
+                if (Number.isNaN(value) || Math.trunc(value) !== value) {
+                  throw new Error(`${config.prefix}${curr} value must be an integer.`);
+                }
+                if (opc.min !== null) {
+                  if (value < opc.min) {
+                    throw new Error(`${config.prefix}${curr} value must be at least ${opc.min}.`);
+                  }
+                }
+                if (opc.max !== null) {
+                  if (value < opc.max) {
+                    throw new Error(`${config.prefix}${curr} value must not be over ${opc.max}.`);
+                  }
+                }
+                break;
+              case "List":
+                value = value.split(opc.seperator);
+                if (opc.min !== null) {
+                  if (value.length < opc.min) {
+                    throw new Error(`${config.prefix}${curr} list must have at least ${opc.min} values.`);
+                  }
+                }
+                if (opc.max !== null) {
+                  if (value.length < opc.max) {
+                    throw new Error(`${config.prefix}${curr} list must not hvae over ${opc.max} values.`);
+                  }
+                }
+                break;
+              case "Bool":
+                value = value.toLocaleLowerCase();
+                value = value === "true" || value === "yes" || value === "y" || (!Number.isNaN(Number(value)) && Number(value) !== 0)//any non zero number will be considered as a true value
+                break;
+              case "Help":
+                showHelp(config);
+                break;
+            }
+
+            result[opc.name] = value;
           }
         } else {
-          throw new Error(`${config.multiPrefix}${c} is not a valid option.`)
+          throw new Error(`${config.prefix}${curr} is not a valid option.`)
         }
 
+      } else if (isMultiPrefix) {
+        curr = curr.slice(config.multiPrefix.length);
+
+        if (!config.caseSensitive) {
+          curr = curr.toLocaleLowerCase();
+        }
+        for (const c of curr) {
+          if (config.options[c]) {
+
+            const opc = config.options[c];
+
+            if (opc.type == "Flag") {
+              result[opc.name] = true;
+            } else if (opc.type == "Mapping") {
+              result[opc.option] = opc.value;
+            } else {
+              throw new Error(`${config.multiPrefix}${c} is not a Flag or Mapping option.`)
+            }
+          } else {
+            throw new Error(`${config.multiPrefix}${c} is not a valid option.`)
+          }
+
+        }
+      } else {
+        result[config.argList].push(curr);
       }
-    } else {
-      result[config.argList].push(curr);
     }
+    return result;
+  } catch (e) {
+    console.log(`Error: ${e.message}\n`);
+    showHelp(config);
   }
-  return result;
 }
 
 
