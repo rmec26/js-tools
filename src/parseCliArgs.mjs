@@ -1,9 +1,9 @@
 //@ts-check
 
 
-/** @typedef {"String"|"Number"|"Integer"|"List"|"NumberList"|"IntegerList"|"Bool"|"Flag"} OptionType */
+/** @typedef {"String"|"Number"|"Integer"|"Value"|"List"|"NumberList"|"IntegerList"|"ValueList"|"Bool"|"Flag"} OptionType */
 /** @typedef {{lessOrEqual?:number,lessEqual?:number,lte?:number,less?:number,lt?:number,greaterOrEqual?:number,greaterEqual?:number,gte?:number,greater?:number,gt?:number}} Limits */
-/** @typedef {{type?:OptionType,alias?:string|string[],defaultValue?:any,seperator?:string,description?:string,valueLimits?:Limits}&Limits} Option */
+/** @typedef {{type?:OptionType,alias?:string|string[],defaultValue?:any,seperator?:string,description?:string,values?:string[],valueLimits?:Limits}&Limits} Option */
 /** @typedef {{option:string,value:any,alias?:string|string[],description?:string}} Mapping */
 
 /** @typedef {{[key:string]:OptionType|Option}} OptionMap */
@@ -15,11 +15,14 @@
 
 /** @typedef {{name:string}} BaseOption */
 /** @typedef {BaseOption & CompiledLimits} SizedOption */
-/** @typedef {SizedOption & {type:"List"|"NumberList"|"IntegerList",seperator:string,valueLimits:CompiledLimits}} ListOption */
+/** @typedef {SizedOption & {seperator:string}} ListOption */
+/** @typedef {ListOption & {type:"List"|"NumberList"|"IntegerList",valueLimits:CompiledLimits}} SizedListOption */
+/** @typedef {ListOption & {type:"ValueList",values:string[]}} ValueListOption */
 /** @typedef {SizedOption & {type:"Number"|"Integer"|"String"}} SizeOnlyOption */
 /** @typedef {BaseOption & {type:"Bool"|"Flag"|"Help"}} SimpleOption */
+/** @typedef {BaseOption & {type:"Value",values:string[]}} ValueOption */
 /** @typedef {BaseOption & {type:"Mapping",option:string,value:any}} MappingOption */
-/** @typedef {ListOption|SizeOnlyOption|SimpleOption|MappingOption} ProcessedOption */
+/** @typedef {SizedListOption|ValueListOption|SizeOnlyOption|SimpleOption|ValueOption|MappingOption} ProcessedOption */
 
 /** @typedef  {{[key:string]:ProcessedOption}} ProcessedOptionMap */
 
@@ -51,6 +54,8 @@ function generateInputExample(type, limits, seperator, defaultValue) {
     constraints.push(`default:${JSON.stringify(defaultValue)}`)
   }
   const suffix = constraints.length ? ` {${constraints.join(",")}}` : ""
+  //TODO add Value and ValueList types
+  //TODO review and improve example generation
   switch (type) {
     case "String":
       return ` <String>${suffix}`
@@ -67,6 +72,8 @@ function generateInputExample(type, limits, seperator, defaultValue) {
     case "Flag":
     case "Mapping":
       return ""
+    default:
+      return `||${type}||`
   }
 }
 
@@ -168,6 +175,8 @@ export function compileCliOptions({ options = {}, mappings = {}, caseSensitive =
 
     const description = generateDescription(prefix, multiPrefix, alias, val.description, type, limits, seperator, val.defaultValue);
 
+    const values = val.values instanceof Array ? [...new Set(val.values)] : [];
+
     helpText.push(description);
 
     /** @type {ProcessedOption} */
@@ -178,10 +187,22 @@ export function compileCliOptions({ options = {}, mappings = {}, caseSensitive =
       case "Integer":
         processedOption = { name, type, ...limits };
         break;
+      case "Value":
+        if (!values.length) {
+          throw new Error(`Error parsing '${name}' option: empty or invalid 'values' list given.`)
+        }
+        processedOption = { name, type, values };
+        break;
       case "List":
       case "NumberList":
       case "IntegerList":
         processedOption = { name, type, seperator, ...limits, valueLimits };
+        break;
+      case "ValueList":
+        if (!values.length) {
+          throw new Error(`Error parsing '${name}' option: empty or invalid 'values' list given.`)
+        }
+        processedOption = { name, type, seperator, ...limits, values };
         break;
       case "Bool":
       case "Flag":
@@ -355,6 +376,11 @@ export function processCliArguments(config, args) {
                 }
                 validateLimits(value, opc, `${config.prefix}${curr} value `, "");
                 break;
+              case "Value":
+                if (!opc.values.includes(value)) {
+                  throw new Error(`${config.prefix}${curr} value must be ${opc.values.map(v => `'${v}'`).join(", ")}.`);
+                }
+                break;
               case "List":
                 value = value.split(opc.seperator);
                 validateLimits(value.length, opc, `${config.prefix}${curr} value `, " values long.");
@@ -382,6 +408,15 @@ export function processCliArguments(config, args) {
                 });
                 validateLimits(value.length, opc, `${config.prefix}${curr} value `, " values long.");
                 break;
+              case "ValueList":
+                value = value.split(opc.seperator);
+                validateLimits(value.length, opc, `${config.prefix}${curr} value `, " values long.");
+                value.forEach((v, i) => {
+                  if (!opc.values.includes(v)) {
+                    throw new Error(`${config.prefix}${curr}[${i}] value must be ${opc.values.map(v => `'${v}'`).join(", ")}.`);
+                  }
+                })
+                break;
               case "Bool":
                 value = value.toLocaleLowerCase();
                 value = value === "true" || value === "yes" || value === "y" || (!Number.isNaN(Number(value)) && Number(value) !== 0)//any non zero number will be considered as a true value
@@ -393,6 +428,15 @@ export function processCliArguments(config, args) {
 
             result[opc.name] = value;
           }
+        } else if (!curr) {//curr is empty
+          if (value === undefined) {
+            if (args.length) {
+              value = args.shift();
+            } else {
+              throw new Error(`No value given for ${config.prefix}`);
+            }
+          }
+          result[config.argList].push(value);
         } else {
           throw new Error(`${config.prefix}${curr} is not a valid option.`)
         }
@@ -463,4 +507,5 @@ export function parseCliArgs(config = {}) {
  * or force the help as always on
  * perhaps make it auto define certain things by the os being used, e.g. use --arg=val on unix and /arg:val on win
  * TODO add flag to show help on processError
+ * TODO hifenToCamel
  */
